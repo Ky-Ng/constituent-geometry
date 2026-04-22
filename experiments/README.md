@@ -5,6 +5,7 @@ Each numbered folder is a self-contained experiment with its own `run.py`, resul
 | # | Name | Status | Description |
 |---|------|--------|-------------|
 | 00 | `00_example` | Template | End-to-end sanity check of the project setup |
+| 01 | `01_2_layer_simple_grammar` | Active | 2-layer, 1-head, `d_model=3` attention-only decoder trained on HI↔HF translation |
 
 ## Convention
 - Create new numbered folders (`01_xxx/`, `02_xxx/`, ...) for new experiments — don't edit old ones.
