@@ -78,9 +78,11 @@ class SinusoidalPositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        # persistent=False: deterministic, so we recompute it instead of storing it
-        # in the checkpoint (keeps model.safetensors to learned weights only).
-        self.register_buffer("pe", pe, persistent=False)
+        # persistent=True: this MUST be saved in the checkpoint. With
+        # persistent=False, from_pretrained's meta-device loading never fills
+        # the buffer (it isn't in the state dict), leaving uninitialized memory
+        # that turns every logit into NaN. The table is tiny, so just save it.
+        self.register_buffer("pe", pe, persistent=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: [B, T, d_model]
         return x + self.pe[: x.size(1)]
@@ -266,25 +268,25 @@ class VaswaniDecoder(nn.Module):
 # HF-facing models
 # =============================================================================
 class VaswaniPreTrainedModel(PreTrainedModel):
-    """Shared base: wires the config class and weight initialization into HF."""
+    """Shared base: wires the config class and weight initialization into HF.
+
+    We deliberately do NOT override ``_init_weights``. The base
+    ``PreTrainedModel._init_weights`` already initializes Linear, Embedding (with
+    padding_idx) and LayerNorm exactly as we want — Normal(0, initializer_range)
+    — and crucially it does so via ``transformers.initialization``'s *guarded*
+    init functions, which skip any tensor already flagged ``_is_hf_initialized``.
+    A hand-rolled override that calls ``module.weight.data.normal_(...)`` bypasses
+    that guard and silently RE-INITIALIZES weights that ``from_pretrained`` just
+    loaded — turning every checkpoint reload into a fresh random model. (To use
+    the paper's Xavier init instead, override this method but operate on the
+    parameter via ``transformers.initialization`` functions, e.g.
+    ``init.xavier_uniform_(module.weight)`` — never ``.data``.)
+    """
 
     config_class = VaswaniConfig
     base_model_prefix = "model"
     main_input_name = "input_ids"
     supports_gradient_checkpointing = False
-
-    def _init_weights(self, module: nn.Module) -> None:
-        # HF convention: normal(0, initializer_range). The 2017 paper used Xavier
-        # uniform instead; swap this body for nn.init.xavier_uniform_ to match it.
-        std = self.config.initializer_range
-        if isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.padding_idx is not None:
-                module.weight.data[module.padding_idx].zero_()
 
 
 class VaswaniModel(VaswaniPreTrainedModel):
