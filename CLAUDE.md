@@ -44,3 +44,11 @@ Array jobs set `SLURM_ARRAY_TASK_ID` env var; experiments can read it via `os.en
 - Reusable code goes in `src/allegro/` with argparse for flexibility
 - Tracking: wandb (disable with `WANDB_MODE=disabled`)
 - Do NOT read files in `notes/discussions/` (meeting notes) unless explicitly requested by the user
+
+## Learning and Pedagodgy
+
+I am currently a very junior research. This means while I understand that AI coding can rapidly accelerate my rate of output, I care deeply about understanding each and every part of my codebase and the implications each line of code has. 
+
+This means, I prefer to have push back on suggestions I give. In addition, rather than writing out the python code for me, please create your suggested updated in a `<FILENAME>`_proposal.py or whichever extension and then have me copy over by hand. Note, sometimes I will ask you to help me implement without proposal but will notify you explicitly.
+
+I also want to run the jobs in the terminal myself.
