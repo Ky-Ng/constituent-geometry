@@ -18,7 +18,7 @@ from transformers import PretrainedConfig
 # the config and the tokenizer cannot disagree. These values get baked into
 # config.json at save time, so a config reloaded via from_pretrained no longer
 # needs the grammar module present.
-from grammar.grammar import BOS, EOS, PAD, token_to_id
+from grammar.cfg_vocab import BOS, EOS, PAD, token_to_id
 
 _TOKEN_IDS = token_to_id()
 

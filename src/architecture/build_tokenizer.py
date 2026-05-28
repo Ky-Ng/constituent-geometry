@@ -27,7 +27,7 @@ from tokenizers.processors import TemplateProcessing
 from transformers import PreTrainedTokenizerFast
 
 # vocab.py is the single source of truth for tokens, ids, and special tokens.
-from grammar.grammar import BOS, EOS, PAD, UNK, token_to_id
+from grammar.cfg_vocab import BOS, EOS, PAD, UNK, token_to_id
 
 
 def build_tokenizer() -> PreTrainedTokenizerFast:
