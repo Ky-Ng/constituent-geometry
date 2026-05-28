@@ -25,7 +25,7 @@ Set `--no-wandb` to disable; `--run-name` to override.
 HF HUB PUSH
 -----------
 After training, the *best* model (selected on val exact-match) and the
-tokenizer are pushed to a PRIVATE Hub repo. The default repo id is
+tokenizer are pushed to a PUBLIC Hub repo. The default repo id is
 `kylelovesllms/<run-name>`, so swapping `--run-name` (or `--dataset`, which
 the run name encodes) also swaps the destination repo. Override with
 `--hub-repo-id`; disable with `--no-push`.
@@ -128,7 +128,7 @@ def main() -> None:
         "--hub-repo-id",
         default=None,
         help="HF Hub repo id to push best model + tokenizer to. "
-             "Default = kylelovesllms/<run-name> (private).",
+             "Default = kylelovesllms/<run-name> (public).",
     )
     p.add_argument(
         "--no-push",
@@ -225,15 +225,15 @@ def main() -> None:
 
     trainer.save_model(f"{args.output_dir}/best")
 
-    # --- push best model + tokenizer to private HF Hub repo -----------------
+    # --- push best model + tokenizer to public HF Hub repo ------------------
     # load_best_model_at_end=True means trainer.model IS the best checkpoint
     # (by val exact_match) at this point, so the push captures the same
     # weights that just produced the test_metrics above.
     if not args.no_push:
         repo_id = args.hub_repo_id or f"kylelovesllms/{args.run_name}"
-        print(f"pushing best model + tokenizer to https://huggingface.co/{repo_id} (private)")
-        trainer.model.push_to_hub(repo_id, private=True)
-        tok.push_to_hub(repo_id, private=True)
+        print(f"pushing best model + tokenizer to https://huggingface.co/{repo_id} (public)")
+        trainer.model.push_to_hub(repo_id, private=False)
+        tok.push_to_hub(repo_id, private=False)
 
 
 if __name__ == "__main__":
