@@ -44,6 +44,10 @@ Array jobs set `SLURM_ARRAY_TASK_ID` env var; experiments can read it via `os.en
 - Reusable code goes in `src/allegro/` with argparse for flexibility
 - Tracking: wandb (disable with `WANDB_MODE=disabled`)
 - Do NOT read files in `notes/discussions/` (meeting notes) unless explicitly requested by the user
+- All experiment subfolders in /experiments should be reproducible at any stage in the repo in case baselines need to be rerun. 
+    - Thus, your flow should always be to copy `experiments/00_example`, then write `experiments/XY_<description>/run_proposal.py` and then tell me the command to run.
+    - You should update the `experiments/XY_<description>/README.md` and `experiments/README.md`
+    - I will also tell you when to update all the `README.md` results after finishing
 
 ## Learning and Pedagodgy
 

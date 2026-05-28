@@ -83,7 +83,128 @@ One row per unique lexicalization of a frame:
 
 ## Results
 
-_No runs yet._
+### Random, K = 100, depth=3
+
+Link: [kylelovesllms/hi_hf_frames_d3_random_100](https://huggingface.co/datasets/kylelovesllms/hi_hf_frames_d3_random_100/viewer/default/train?p=1)
+
+Command
+```
+sbatch slurm/run_cpu.sbatch experiments/05_build_dataset_with_frames/run.py --max-depth 3 --k 100 --split-policy random_frame --out experiments/05_build_dataset_with_frames/artifacts/hi_hf_frames_d3_random_100 --push kylelovesllms/hi_hf_frames_d3_random_100
+```
+
+Results
+```
+=== Dataset summary ===
+Split            Rows       %  Frames   n_tokens (min/avg/max)
+--------------------------------------------------------------
+train           7,200   80.3%      72   3 / 11.6 / 17
+validation        864    9.6%       9   2 / 11.6 / 15
+test              900   10.0%       9   8 / 10.6 / 14
+--------------------------------------------------------------
+TOTAL           8,964               90
+
+=== Depth breakdown (frames / rows per depth) ===
+Split              depth=0       depth=1       depth=2       depth=3
+--------------------------------------------------------------------
+train            5 /   500    10 / 1,000    15 / 1,500    42 / 4,200
+validation       1 /    64     0 /     0     4 /   400     4 /   400
+test             0 /     0     2 /   200     5 /   500     2 /   200
+--------------------------------------------------------------------
+TOTAL            6 /   564    12 / 1,200    24 / 2,400    48 / 4,800
+
+=== Rows per (split, depth) ===
+Split          depth=0   depth=1   depth=2   depth=3     Total
+--------------------------------------------------------------
+train              500     1,000     1,500     4,200     7,200
+validation          64         0       400       400       864
+test                 0       200       500       200       900
+--------------------------------------------------------------
+TOTAL              564     1,200     2,400     4,800     8,964
+```
+
+### Heldout Depth 3, K = 100, depth=3
+
+Link: [kylelovesllms/hi_hf_frames_d3_100_heldoutdepth_3](https://huggingface.co/datasets/kylelovesllms/hi_hf_frames_d3_100_heldoutdepth_3)
+
+Command
+```
+sbatch slurm/run_cpu.sbatch experiments/05_build_dataset_with_frames/run.py --max-depth 3 --k 100 --split-policy held_out_depth --out experiments/05_build_dataset_with_frames/artifacts/hi_hf_frames_d3_100_heldoutdepth_3 --push kylelovesllms/hi_hf_frames_d3_100_heldoutdepth_3
+```
+
+Results
+```
+=== Dataset summary ===
+Split            Rows       %  Frames   n_tokens (min/avg/max)
+--------------------------------------------------------------
+train           4,164   46.5%      42   2 / 8.6 / 13
+validation      2,400   26.8%      24   11 / 13.8 / 17
+test            2,400   26.8%      24   12 / 14.2 / 16
+--------------------------------------------------------------
+TOTAL           8,964               90
+
+=== Depth breakdown (frames / rows per depth) ===
+Split              depth=0       depth=1       depth=2       depth=3
+--------------------------------------------------------------------
+train            6 /   564    12 / 1,200    24 / 2,400     0 /     0
+validation       0 /     0     0 /     0     0 /     0    24 / 2,400
+test             0 /     0     0 /     0     0 /     0    24 / 2,400
+--------------------------------------------------------------------
+TOTAL            6 /   564    12 / 1,200    24 / 2,400    48 / 4,800
+
+=== Rows per (split, depth) ===
+Split          depth=0   depth=1   depth=2   depth=3     Total
+--------------------------------------------------------------
+train              564     1,200     2,400         0     4,164
+validation           0         0         0     2,400     2,400
+test                 0         0         0     2,400     2,400
+--------------------------------------------------------------
+TOTAL              564     1,200     2,400     4,800     8,964
+```
+
+### Heldout Depth 4, K = 100, depth=4
+
+Link: [kylelovesllms/hi_hf_frames_d4_100_heldoutdepth_4](https://huggingface.co/datasets/kylelovesllms/hi_hf_frames_d4_100_heldoutdepth_4/viewer/default/train?p=1)
+
+Command
+```
+sbatch slurm/run_cpu.sbatch experiments/05_build_dataset_with_frames/run.py --max-depth 4 --k 100 --split-policy held_out_depth --out experiments/05_build_dataset_with_frames/artifacts/hi_hf_frames_d4_100_heldoutdepth_4 --push kylelovesllms/hi_hf_frames_d4_100_heldoutdepth_4
+```
+
+Results
+```
+enumerating frames up to depth 4: 186 total frames
+split policy = held_out_depth: train=90 frames, val=48 frames, test=48 frames
+
+=== Dataset summary ===
+Split            Rows       %  Frames   n_tokens (min/avg/max)
+--------------------------------------------------------------
+train           8,964   48.3%      90   2 / 11.5 / 17
+validation      4,800   25.9%      48   15 / 17.7 / 21
+test            4,800   25.9%      48   14 / 17.3 / 20
+--------------------------------------------------------------
+TOTAL          18,564              186
+
+=== Depth breakdown (frames / rows per depth) ===
+Split              depth=0       depth=1       depth=2       depth=3       depth=4
+----------------------------------------------------------------------------------
+train            6 /   564    12 / 1,200    24 / 2,400    48 / 4,800     0 /     0
+validation       0 /     0     0 /     0     0 /     0     0 /     0    48 / 4,800
+test             0 /     0     0 /     0     0 /     0     0 /     0    48 / 4,800
+----------------------------------------------------------------------------------
+TOTAL            6 /   564    12 / 1,200    24 / 2,400    48 / 4,800    96 / 9,600
+
+=== Rows per (split, depth) ===
+Split          depth=0   depth=1   depth=2   depth=3   depth=4     Total
+------------------------------------------------------------------------
+train              564     1,200     2,400     4,800         0     8,964
+validation           0         0         0         0     4,800     4,800
+test                 0         0         0         0     4,800     4,800
+------------------------------------------------------------------------
+TOTAL              564     1,200     2,400     4,800     9,600    18,564
+
+saved 18,564 rows to experiments/05_build_dataset_with_frames/artifacts/hi_hf_frames_d4_100_heldoutdepth_4
+pushed to https://huggingface.co/datasets/kylelovesllms/hi_hf_frames_d4_100_heldoutdepth_4
+```
 
 ## Notes
 

@@ -33,17 +33,29 @@ from __future__ import annotations
 #   C            -> [C ...]
 VOCAB: dict[str, list[str]] = {
     "D": ["the", "a", "this"],
-    "NP_singular": ["dog", "cat", "boy", "girl"],
-    "NP_proper": ["John", "Mary", "Iskarous", "Jia"],
+    "NP_singular": [
+        "dog", "cat", "boy", "girl",
+        "teacher", "student", "friend", "researcher",
+        "dancer", "artist", "musician", "engineer",
+        "father", "mother", "sister", "brother",
+    ],
+    "NP_proper": [
+        "John", "Mary", "Iskarous", "Jia",
+        "James", "Hamilton", "Betty", "Shri",
+    ],
     "V_dp": [
         "likes", "believes", "hates", "knows",
         "faces", "kisses", "chases", "pursues", "loves",
+        "soothes", "hugs", "consoles", "tickles", "bedazzles", "vexes",
     ],
     "V_cp": [
         "likes", "believes", "hates", "thinks",
         "knows", "assumes", "claims",
     ],
-    "V_intrans": ["swims", "dances", "sings"],
+    "V_intrans": [
+        "swims", "dances", "sings",
+        "laughs", "smiles", "claps", "jeers", "applauds",
+    ],
     "C": ["that"],
 }
 

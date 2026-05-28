@@ -51,6 +51,7 @@ Schema (one row per unique lexicalization of a frame):
 
 import argparse
 import random
+from collections import Counter
 
 from datasets import Dataset, DatasetDict
 from tqdm import tqdm
@@ -99,6 +100,100 @@ def split_frames(
         n_val = len(deep) // 2
         return shallow, deep[:n_val], deep[n_val:]
     raise ValueError(f"unknown --split-policy: {policy!r}")
+
+
+def print_split_stats(ds: DatasetDict) -> None:
+    """Print two stdout tables: a per-split summary, and per-(split, depth) frame
+    + row counts. Informational only — no behavior change, no effect on saved files.
+    """
+    # --- collect stats -----------------------------------------------------
+    total_rows = sum(len(s) for s in ds.values())
+    summary = []
+    per_split_depth: dict[str, dict[int, tuple[int, int]]] = {}
+    all_depths: set[int] = set()
+    for name, split in ds.items():
+        n_rows = len(split)
+        ntoks = split["n_tokens"]
+        summary.append({
+            "split": name,
+            "rows": n_rows,
+            "pct": (n_rows / total_rows * 100) if total_rows else 0.0,
+            "frames": len(set(split["frame_id"])),
+            "ntok_min": min(ntoks) if n_rows else 0,
+            "ntok_avg": (sum(ntoks) / n_rows) if n_rows else 0.0,
+            "ntok_max": max(ntoks) if n_rows else 0,
+        })
+        depth_frames: dict[int, set] = {}
+        depth_rows: Counter = Counter()
+        for fid, d in zip(split["frame_id"], split["depth"]):
+            depth_frames.setdefault(d, set()).add(fid)
+            depth_rows[d] += 1
+        per_split_depth[name] = {d: (len(depth_frames[d]), depth_rows[d]) for d in depth_frames}
+        all_depths.update(depth_frames)
+    depths_sorted = sorted(all_depths)
+    total_frames = sum(s["frames"] for s in summary)
+
+    # --- Table 1: per-split summary ----------------------------------------
+    print()
+    print("=== Dataset summary ===")
+    header = f"{'Split':<12} {'Rows':>8} {'%':>7} {'Frames':>7}   n_tokens (min/avg/max)"
+    print(header)
+    print("-" * len(header))
+    for s in summary:
+        print(
+            f"{s['split']:<12} {s['rows']:>8,} {s['pct']:>6.1f}% {s['frames']:>7d}   "
+            f"{s['ntok_min']} / {s['ntok_avg']:.1f} / {s['ntok_max']}"
+        )
+    print("-" * len(header))
+    print(f"{'TOTAL':<12} {total_rows:>8,} {'':>7}  {total_frames:>7d}")
+
+    # --- Table 2: per-(split, depth) frame and row counts ------------------
+    print()
+    print("=== Depth breakdown (frames / rows per depth) ===")
+    cell_w = 14
+    header = f"{'Split':<12}" + "".join(f"{'depth=' + str(d):>{cell_w}}" for d in depths_sorted)
+    print(header)
+    print("-" * len(header))
+    for name in ds.keys():
+        line = f"{name:<12}"
+        for d in depths_sorted:
+            frames, rows = per_split_depth[name].get(d, (0, 0))
+            line += f"{frames:>3d} / {rows:>5,}".rjust(cell_w)
+        print(line)
+    print("-" * len(header))
+    totals = f"{'TOTAL':<12}"
+    for d in depths_sorted:
+        f_sum = sum(per_split_depth[n].get(d, (0, 0))[0] for n in ds.keys())
+        r_sum = sum(per_split_depth[n].get(d, (0, 0))[1] for n in ds.keys())
+        totals += f"{f_sum:>3d} / {r_sum:>5,}".rjust(cell_w)
+    print(totals)
+
+    # --- Table 3: per-(split, depth) row counts only, with split totals ----
+    print()
+    print("=== Rows per (split, depth) ===")
+    cell_w = 10
+    header = f"{'Split':<12}" + "".join(f"{'depth=' + str(d):>{cell_w}}" for d in depths_sorted) + f"{'Total':>{cell_w}}"
+    print(header)
+    print("-" * len(header))
+    for name in ds.keys():
+        line = f"{name:<12}"
+        split_total = 0
+        for d in depths_sorted:
+            _, rows = per_split_depth[name].get(d, (0, 0))
+            line += f"{rows:>{cell_w},}"
+            split_total += rows
+        line += f"{split_total:>{cell_w},}"
+        print(line)
+    print("-" * len(header))
+    totals = f"{'TOTAL':<12}"
+    grand = 0
+    for d in depths_sorted:
+        r_sum = sum(per_split_depth[n].get(d, (0, 0))[1] for n in ds.keys())
+        totals += f"{r_sum:>{cell_w},}"
+        grand += r_sum
+    totals += f"{grand:>{cell_w},}"
+    print(totals)
+    print()
 
 
 def materialize(frames: list[FrameS], k: int, sampler_seed: int, desc: str) -> Dataset:
@@ -167,9 +262,11 @@ def main() -> None:
 
     ds = build(args.max_depth, args.k, args.split_policy, args.split_seed)
     print(ds)
+    print_split_stats(ds)
 
     ds.save_to_disk(args.out)
-    print(f"saved to {args.out}")
+    total_rows = sum(len(s) for s in ds.values())
+    print(f"saved {total_rows:,} rows to {args.out}")
 
     if args.push:
         ds.push_to_hub(args.push, private=args.private)

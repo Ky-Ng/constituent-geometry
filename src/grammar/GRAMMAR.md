@@ -46,6 +46,18 @@ dog
 cat
 boy
 girl
+teacher
+student
+friend
+researcher
+dancer
+artist
+musician
+engineer
+father
+mother
+sister
+brother
 ```
 
 ### NP_proper
@@ -54,6 +66,10 @@ John
 Mary
 Iskarous
 Jia
+James
+Hamilton
+Betty
+Shri
 ```
 
 ### V_dp
@@ -68,6 +84,12 @@ kisses
 chases
 pursues
 loves
+soothes
+hugs
+consoles
+tickles
+bedazzles
+vexes
 ```
 
 ### V_cp
@@ -86,6 +108,11 @@ claims
 swims
 dances
 sings
+laughs
+smiles
+claps
+jeers
+applauds
 ```
 
 ### C
