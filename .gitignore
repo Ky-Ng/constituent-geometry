@@ -26,6 +26,7 @@ wandb/
 experiments/*/results/
 experiments/*/logs/
 experiments/*/figures/
+experiments/*/artifacts/
 
 # OS
 .DS_Store
