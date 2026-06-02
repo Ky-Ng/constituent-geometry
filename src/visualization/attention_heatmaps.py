@@ -42,12 +42,10 @@ and collect the family-specific attention tensors:
 * GPT2-RoPE (1 family):
     - ``self``          -- [L, H, T_full, T_full]  full sequence, causal
 
-For each family we dump up to two figures into ``--output-dir``:
+For each family we dump one figure into ``--output-dir``:
 
 * ``{slug}_{family}_per_head.png``  -- (n_layers x n_heads) grid of
   heatmaps, axes labelled with the surface tokens.
-* ``{slug}_{family}_head_avg.png``  -- (1 x n_layers) row, averaged across
-  heads. Useful as the at-a-glance "where does layer L look".
 
 If ``--hf`` is omitted we first call ``model.generate(...)`` and then
 re-forward against the generated sequence -- so the attentions reflect
@@ -370,38 +368,6 @@ def _plot_per_head(
     plt.close(fig)
 
 
-def _plot_head_avg(
-    attn: torch.Tensor,            # [L, H, Tq, Tk]
-    query_tokens: list[str],
-    key_tokens: list[str],
-    title: str,
-    save_path: Path,
-) -> None:
-    import matplotlib.pyplot as plt
-
-    n_layers = attn.shape[0]
-    avg = attn.mean(dim=1)         # [L, Tq, Tk]
-    fig, axes = plt.subplots(
-        1, n_layers,
-        figsize=(2.6 * n_layers + 1.5, 2.8),
-        squeeze=False,
-    )
-    for layer in range(n_layers):
-        ax = axes[0][layer]
-        ax.imshow(avg[layer], cmap="viridis", aspect="auto",
-                  vmin=0.0, vmax=1.0)
-        ax.set_title(f"layer {layer}", fontsize=10)
-        ax.set_xticks(range(len(key_tokens)))
-        ax.set_xticklabels(key_tokens, rotation=90, fontsize=7)
-        ax.set_yticks(range(len(query_tokens)))
-        ax.set_yticklabels(query_tokens, fontsize=7)
-    axes[0][0].set_ylabel("query", fontsize=9)
-    fig.suptitle(title + " (head-averaged)", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
-
-
 # ============================================================================
 # CLI
 # ============================================================================
@@ -431,9 +397,6 @@ def main() -> None:
     p.add_argument("--max-new-tokens", type=int, default=64,
                    help="Only used when --hf is omitted (generation cap). "
                         "Mirror the experiment's --max-length default.")
-    p.add_argument("--show", default="both",
-                   choices=("per_head", "head_avg", "both"),
-                   help="Which figure(s) to render per attention family.")
     args = p.parse_args()
 
     adapter = ADAPTERS[args.model_type]
@@ -463,16 +426,10 @@ def main() -> None:
     written: list[Path] = []
     for name, attn in bundle.groups.items():
         title = f"{args.model_type} {name}  |  HI: {args.hi!r}"
-        if args.show in ("per_head", "both"):
-            path = out_dir / f"{slug}_{name}_per_head.png"
-            _plot_per_head(attn, bundle.query_tokens[name],
-                           bundle.key_tokens[name], title, path)
-            written.append(path)
-        if args.show in ("head_avg", "both"):
-            path = out_dir / f"{slug}_{name}_head_avg.png"
-            _plot_head_avg(attn, bundle.query_tokens[name],
-                           bundle.key_tokens[name], title, path)
-            written.append(path)
+        path = out_dir / f"{slug}_{name}_per_head.png"
+        _plot_per_head(attn, bundle.query_tokens[name],
+                       bundle.key_tokens[name], title, path)
+        written.append(path)
 
     print(f"saved {len(written)} figure(s) into {out_dir}/  (slug={slug})")
     for path in written:
