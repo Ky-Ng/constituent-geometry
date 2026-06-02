@@ -1,29 +1,40 @@
 """Per-layer attention heatmaps for a saved seq2seq / causal checkpoint.
 
-Two model families are wired up:
+Three model families are wired up:
 
-* ``vaswani``    -- the Vaswani encoder-decoder
-                    (``modeling_vaswani.VaswaniForConditionalGeneration``).
-                    Returns three attention families: encoder self,
-                    decoder self (causal), and cross.
-* ``gpt2_rope``  -- the GPT2-style decoder-only with RoPE
-                    (``modeling_gpt2_rope.GPT2RoPEForCausalLM``). Returns
-                    one family, ``self``, over the concatenated sequence
-                    ``[<bos>] + hi + [<sot>] + hf + [<eos>]``. The ``<sot>``
-                    token in the axis labels divides the HI block from the
-                    HF block; the lower-left rectangle (HF rows x HI cols)
-                    is the decoder-only analog of Vaswani's ``cross``.
+* ``vaswani``      -- the Vaswani encoder-decoder with sinusoidal PE
+                      (``modeling_vaswani.VaswaniForConditionalGeneration``).
+                      Returns three attention families: encoder self,
+                      decoder self (causal), and cross.
+* ``vaswani_rope`` -- the same encoder-decoder but with rotary PE
+                      (``modeling_vaswani_rope.VaswaniRoPEForConditionalGeneration``).
+                      Identical forward / output_attentions API to ``vaswani``
+                      (they differ only internally in how position enters
+                      attention), so it reuses ``_extract_vaswani`` and returns
+                      the same three families.
+* ``gpt2_rope``    -- the GPT2-style decoder-only with RoPE
+                      (``modeling_gpt2_rope.GPT2RoPEForCausalLM``). Returns
+                      one family, ``self``, over the concatenated sequence
+                      ``[<bos>] + hi + [<sot>] + hf + [<eos>]``. The ``<sot>``
+                      token in the axis labels divides the HI block from the
+                      HF block; the lower-left rectangle (HF rows x HI cols)
+                      is the decoder-only analog of Vaswani's ``cross``.
+
+The two Vaswani variants write the SAME ``model_type = "vaswani"`` into
+config.json and are distinguished only by the ``architectures`` class name, so
+we cannot auto-pick them apart -- choose with ``--model-type``.
 
 Adding a new family is a matter of writing ``_load_<name>`` and
-``_extract_<name>`` and adding an entry to ``ADAPTERS``. The plotting
-code reads ``AttentionBundle.groups`` generically, so it does not change.
+``_extract_<name>`` and adding an entry to ``ADAPTERS`` (or reusing an existing
+``_extract_*`` when the forward API matches, as ``vaswani_rope`` does). The
+plotting code reads ``AttentionBundle.groups`` generically, so it does not change.
 
 What it renders
 ---------------
 For each prompt we forward through the model with ``output_attentions=True``
 and collect the family-specific attention tensors:
 
-* Vaswani (3 families):
+* Vaswani / Vaswani-RoPE (3 families):
     - ``encoder_self``  -- [L, H, T_enc, T_enc]  HI tokens attending to HI
     - ``decoder_self``  -- [L, H, T_dec, T_dec]  HF tokens attending to HF (causal)
     - ``cross``         -- [L, H, T_dec, T_enc]  HF tokens attending to HI
@@ -50,11 +61,12 @@ no rows/cols of zeros from <pad>.
 Caveats
 -------
 * ``matplotlib`` must be installed (added to pyproject as ``matplotlib>=3.10.9``).
-* For Vaswani, ``max_position_embeddings`` is the sinusoidal PE table size --
+* For Vaswani (sinusoidal), ``max_position_embeddings`` is the PE table size --
   an HI input longer than that crashes with a shape mismatch. We warn before
-  forwarding. For GPT2-RoPE the same bound applies to the *concatenated*
-  sequence ``len(<bos> + hi + <sot> + hf + <eos>)``, not just HI, so the
-  warning here is a conservative lower bound for that model type.
+  forwarding. For Vaswani-RoPE the bound is the rotary table length and for
+  GPT2-RoPE it applies to the *concatenated* sequence
+  ``len(<bos> + hi + <sot> + hf + <eos>)``, not just HI, so the warning here is
+  a conservative lower bound for those model types.
 * Vaswani decoder rows are labelled with the **decoder inputs**
   (``[<bos>, hf[0], ..., hf[-2]]``), not the labels the model is trying
   to predict at that position. Row 0's attention is what the model uses
@@ -73,6 +85,13 @@ Usage
         --model kylelovesllms/06_vaswani_original_hi_hf_frames_heads_4_layers_4_random_depth_3 \\
         --hi "the dog sees the cat" \\
         --output-dir experiments/06_vaswani_original_hi_hf_frames_heads_4_layers_4/figures/attn_indist
+
+    # Same prompt against the Vaswani-RoPE checkpoint (reuses the vaswani extract):
+    uv run python -m visualization.attention_heatmaps \\
+        --model-type vaswani_rope \\
+        --model experiments/07_vaswani_RoPE_hi_hf_frames_heads_4_layers_4/results/best \\
+        --hi "the dog sees the cat" \\
+        --output-dir experiments/07_vaswani_RoPE_hi_hf_frames_heads_4_layers_4/figures/attn_indist
 
     # Same prompt against the GPT2-RoPE random-split checkpoint:
     uv run python -m visualization.attention_heatmaps \\
@@ -129,6 +148,22 @@ def _load_vaswani(path: str, device: str):
     from architecture.modeling_vaswani import VaswaniForConditionalGeneration
 
     model = VaswaniForConditionalGeneration.from_pretrained(path).to(device).eval()
+    tok = AutoTokenizer.from_pretrained(path)
+    return model, tok
+
+
+def _load_vaswani_rope(path: str, device: str):
+    # Same encoder-decoder API as _load_vaswani; only the internal position
+    # encoding differs (rotary vs sinusoidal). Because the forward / generate /
+    # output_attentions surface is identical, this family reuses _extract_vaswani
+    # in the ADAPTERS table -- no separate extractor needed.
+    from architecture.modeling_vaswani_rope import (
+        VaswaniRoPEForConditionalGeneration,
+    )
+
+    model = (
+        VaswaniRoPEForConditionalGeneration.from_pretrained(path).to(device).eval()
+    )
     tok = AutoTokenizer.from_pretrained(path)
     return model, tok
 
@@ -283,8 +318,9 @@ def _extract_gpt2_rope(
 
 
 ADAPTERS: dict[str, dict[str, Callable]] = {
-    "vaswani":   {"load": _load_vaswani,   "extract": _extract_vaswani},
-    "gpt2_rope": {"load": _load_gpt2_rope, "extract": _extract_gpt2_rope},
+    "vaswani":      {"load": _load_vaswani,      "extract": _extract_vaswani},
+    "vaswani_rope": {"load": _load_vaswani_rope, "extract": _extract_vaswani},
+    "gpt2_rope":    {"load": _load_gpt2_rope,    "extract": _extract_gpt2_rope},
 }
 
 
@@ -375,8 +411,9 @@ def main() -> None:
                    help="HF Hub repo id or local checkpoint dir. Must contain "
                         "both model and tokenizer artifacts.")
     p.add_argument("--model-type", default="vaswani", choices=sorted(ADAPTERS),
-                   help="Which adapter to use: 'vaswani' (encoder-decoder) "
-                        "or 'gpt2_rope' (decoder-only with RoPE).")
+                   help="Which adapter to use: 'vaswani' (sinusoidal seq2seq), "
+                        "'vaswani_rope' (RoPE seq2seq), or 'gpt2_rope' "
+                        "(decoder-only with RoPE).")
     p.add_argument("--hi", required=True,
                    help="HI prompt. For Vaswani this is the encoder input; "
                         "for GPT2-RoPE this is the part before <sot>.")
@@ -402,11 +439,12 @@ def main() -> None:
     adapter = ADAPTERS[args.model_type]
     model, tok = adapter["load"](args.model, args.device)
 
-    # PE-table bounds check. For Vaswani this is exact (the sinusoidal PE
-    # table covers exactly the encoder input). For GPT2-RoPE this is a
-    # conservative lower bound -- the actual constraint is on the FULL
-    # concatenated sequence (<bos> + hi + <sot> + hf + <eos>), not just
-    # HI; that path will raise a clear RoPE indexing error if exceeded.
+    # PE-table bounds check. For Vaswani (sinusoidal) this is exact (the PE
+    # table covers exactly the encoder input). For Vaswani-RoPE / GPT2-RoPE this
+    # is a conservative lower bound -- the actual constraint is the rotary table
+    # length, and for GPT2-RoPE it is on the FULL concatenated sequence
+    # (<bos> + hi + <sot> + hf + <eos>), not just HI; that path will raise a
+    # clear RoPE indexing error if exceeded.
     max_pos = getattr(model.config, "max_position_embeddings", None)
     n_in = len(tok(args.hi)["input_ids"])
     if max_pos is not None and n_in > max_pos:
