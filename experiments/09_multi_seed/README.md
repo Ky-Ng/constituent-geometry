@@ -8,9 +8,9 @@ the **same `random_frame` depth-3 dataset** and save all checkpoints locally, so
 follow-up step can compare heatmaps visually and quantitatively (cosine similarity)
 across seeds.
 
-> **Scope note.** This experiment covers **training only** — producing the 30
-> checkpoints. The cross-seed heatmap comparison is **deferred** (see *Next step*).
-> Grokking is also deferred: we keep **epochs = 30** (the 06/07/08 baseline) so the
+> **Scope note.** This experiment produces the 30 checkpoints **and** the cross-seed
+> heatmap comparison (both done — see *Results*). Grokking is deferred to exp 10:
+> we keep **epochs = 30** (the 06/07/08 baseline) so the
 > heatmaps stay directly comparable to the existing single-model figures. On
 > `random_frame` depth-3 these models already reach ~1.0 test exact-match, so there
 > is no generalization gap to "grok" here anyway — that question belongs on the
@@ -99,9 +99,44 @@ cluster and finishes in minutes. Use array when you'd rather trade GPUs for clea
 per-task logs and the lowest wall-clock on an idle cluster.
 
 ## Results
+_(30-run sweep complete — 3 archs × 10 seeds, 30 epochs, `random_frame` depth-3.)_
 
-_No results yet._ After the sweep, expect 30 checkpoints at
-`results/<arch>/seed_<S>/best/` (3 archs × 10 seeds).
+**Task accuracy — all three archs saturate, seed-robustly.** Final held-out-frame
+**test exact-match** (mean over the 10 seeds, min–max):
+
+| arch | test exact-match (mean) | min | max |
+|---|---|---|---|
+| `vaswani` | **0.9999** | 0.9989 | 1.0000 |
+| `vaswani_rope` | **0.9999** | 0.9989 | 1.0000 |
+| `gpt2_rope` | **0.9976** | 0.9811 | 1.0000 |
+
+So on `random_frame` depth-3 there is essentially **no generalization gap and no
+seed sensitivity in accuracy** — every seed of every arch solves the task. This is
+exactly why grokking is studied separately on `held_out_depth` in exp 10.
+
+**Cross-seed heatmap consistency** (`gather_heatmaps.py`, 12 depth-stratified
+prompts; mean **order-invariant matched cosine** vs the seed-42 reference, averaged
+over the 9 off-reference seeds × all families/layers/prompts):
+
+| arch | matched cosine | naive (same-index) | min matched |
+|---|---|---|---|
+| `vaswani` | **0.835** | 0.776 | 0.432 |
+| `vaswani_rope` | 0.752 | 0.687 | 0.323 |
+| `gpt2_rope` | 0.656 | 0.583 | 0.374 |
+
+Takeaways:
+- **Heatmaps are only moderately seed-consistent even though accuracy is ~1.0** —
+  many functionally-equivalent attention solutions exist, so a single-seed heatmap
+  (as in 06/07/08) is *not* fully representative. Consistency is highest for the
+  original Vaswani (sinusoidal) model and lowest for the decoder-only `gpt2_rope`.
+- **Head-permutation matters**: matched cosine beats naive same-index by ~0.06–0.07
+  everywhere, confirming seeds learn the same heads under a relabeling (the
+  assignment-problem alignment is doing real work).
+- The low `min matched` (0.32–0.43) shows at least one seed/layer that genuinely
+  diverges from the reference in each arch.
+
+Per-(family, layer, seed) numbers are in `results/<arch>/heatmap_consistency.csv`;
+the seeds-as-rows grids are under `figures/<arch>/heatmaps/depth<D>-ex<N>/`.
 
 ## Cross-seed heatmap consistency (`compare_heatmaps.py`)
 For one architecture and one **fixed prompt**, render — per attention family, per
