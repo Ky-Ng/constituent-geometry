@@ -1,11 +1,16 @@
 """Export the attention-heatmap viewer as a shareable zip bundle.
 
-Unlike server.py (which serves figures live over Flask), this walks the same
-``experiments/*/figures/<folder>/*.png`` tree once and writes a single .zip:
+Unlike server.py (which serves figures live over Flask), this walks the
+``experiments/*/figures/`` tree once and writes a single .zip:
 
     attention_heatmaps_<YYYYMMDD_HHMMSS>/
         index.html                       <- dropdown UX, vanilla JS, no server
         figures/<exp>/<folder>/*.png     <- the PNGs, copied verbatim
+
+``<folder>`` is the directory's path *relative to* ``figures/`` and may be
+nested several levels deep (e.g. ``vaswani/heatmaps/depth3-ex1``). We recurse to
+find every directory that directly contains PNGs, so both the flat older layout
+(``figures/depth2-ex2/``) and the nested newer one are picked up.
 
 ``index.html`` references the PNGs by relative path, so the recipient just
 unzips and opens index.html in any browser — no server, no network. Keeping the
@@ -19,8 +24,8 @@ the figures tree grows. The creation timestamp is stamped onto the zip filename
 
 NOTE: importing ``.server`` here constructs the (unused) Dash ``app`` object as
 an import side effect. It's cheap and binds no socket, so it's harmless. If you
-dislike that, lift discover_experiments/discover_folders/list_pngs/EXP_ROOT into
-the (currently empty) ``__init__.py`` and import them from there in both files.
+dislike that, lift discover_experiments/EXP_ROOT into the (currently empty)
+``__init__.py`` and import them from there in both files.
 """
 from __future__ import annotations
 
@@ -41,7 +46,8 @@ def collect(
 
     manifest: {experiment: {folder: [{"name", "src"(relative url)}, ...]}}
     files:    [(abspath, "figures/<exp>/<folder>/<name>"), ...] to add to the zip
-    Empty experiments/folders are dropped from the manifest.
+    ``folder`` is a (possibly nested) path under ``figures/``, e.g.
+    ``vaswani/heatmaps/depth3-ex1``. Empty experiments/folders are dropped.
     """
     data: dict[str, dict[str, list[dict]]] = {}
     files: list[tuple[Path, str]] = []
@@ -53,7 +59,9 @@ def collect(
                 abspath = EXP_ROOT / exp / "figures" / folder / name
                 files.append((abspath, f"figures/{exp}/{folder}/{name}"))
                 # URL-encode each path component so spaces/odd chars resolve.
-                src = "/".join(quote(p) for p in ("figures", exp, folder, name))
+                # ``folder`` itself may contain '/', so split before quoting.
+                parts = ("figures", exp, *folder.split("/"), name)
+                src = "/".join(quote(p) for p in parts)
                 items.append({"name": name, "src": src})
             if items:
                 folders[folder] = items
