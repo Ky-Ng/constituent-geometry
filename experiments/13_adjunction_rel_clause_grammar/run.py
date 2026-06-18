@@ -33,6 +33,8 @@ Usage:
 Split policy: random_frame (80/10/10 by frame_id). Same as experiment 05.
 
 Schema (one row per unique lexicalization of a frame):
+    hi_structure      str   structure tag (Subj/Verb/Obj + depth), HI order  <- new
+    hf_structure      str   same structure tag in HF order  <- new
     frame_id          str   coarse-label bracketed skeleton (defines split)
     depth             int   max CP nesting (CP_sent + CP_rel)  <- new meaning
     tree_height       int   max leaf depth in full constituency tree  <- new
@@ -63,6 +65,7 @@ from grammar.v2.generate_with_frames import (
     FrameS,
     FrameSentencePair,
     enumerate_frames,
+    structure,
     sample_pairs_from_frame,
 )
 
@@ -76,6 +79,8 @@ DECISIONS_DIR = EXP_DIR / "artifacts" / "decisions"
 
 def _pair_to_row(pair: FrameSentencePair) -> dict:
     return {
+        "hi_structure": pair.hi_structure,
+        "hf_structure": pair.hf_structure,
         "frame_id": pair.frame_id,
         "depth": pair.depth,
         "tree_height": pair.tree_height,
@@ -148,10 +153,12 @@ def stage1_enumerate(
 
     frame_rows = [
         {
-            "frame_id": f.bracketed_skeleton(fine=False),
-            "frame_id_fine": f.bracketed_skeleton(fine=True),
+            "hi_structure": structure(f, head_initial=True),
+            "hf_structure": structure(f, head_initial=False),
             "depth": f.depth(),
             "tree_height_est": f.tree_height_estimate(),
+            "frame_id": f.bracketed_skeleton(fine=False),
+            "frame_id_fine": f.bracketed_skeleton(fine=True),
         }
         for f in frames
     ]

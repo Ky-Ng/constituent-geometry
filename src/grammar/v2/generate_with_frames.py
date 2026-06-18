@@ -9,6 +9,10 @@ Adds to v1 (grammar/generate_with_frames.py):
   - New `tree_height()` utility: max leaf depth in the full constituency tree.
   - Position-tagged frame strings in FrameSentencePair.
   - `is_ambiguous` flag (cross-frame, set False here; computed in run.py).
+  - `structure()`: human-readable per-argument clause-structure tag
+    (e.g. "Subj0_Verb0_Obj0") that abstracts away adj/adv modification and
+    expands relative clauses by depth. Emitted in both head-initial and
+    head-final order (hi_structure / hf_structure). See its section below.
 
 CFG rules (HI / HF):
   S -> DP VP                                      / same
@@ -790,6 +794,97 @@ def enumerate_frames(max_depth: int) -> Iterator[FrameS]:
 
 
 # ---------------------------------------------------------------------------
+# Structure tags
+# ---------------------------------------------------------------------------
+#
+# A compact, lexicalization-independent summary of a frame's clause structure
+# for human inspection/searching. It abstracts away adjective/adverb modifiers
+# (and determiners, complementizers, and gaps), but expands relative clauses so
+# the recursion is visible. Walking the sentence in surface order, each overt
+# argument/verb emits one token:
+#
+#     <Subj|Obj|Verb><depth>
+#
+# joined by "_", where depth = clause-embedding level (matrix = 0; each relative
+# clause or complement clause is +1 relative to its host clause). Rules:
+#   * Subject DP -> Subj<d>; DP object of a transitive verb (V_dp) -> Obj<d>.
+#   * Every verb (V_intrans/V_dp/V_cp) -> Verb<d>.
+#   * A clausal complement (V_cp -> CP_sent) emits NO Obj; it only expands the
+#     embedded clause at depth+1. So Verb0_Obj0 = DP object, Verb0_Subj1 =
+#     clausal complement, bare Verb0 = intransitive.
+#   * Relative clauses are expanded at depth+1 (subject-gap RC drops Subj;
+#     object-gap RC drops Obj -- the gapped argument is silent).
+#   * The tag depends only on frame STRUCTURE, not the sampled words, so it is
+#     identical across every lexicalization of a frame.
+#
+# head_initial flips emission order only; the role+depth of every token is the
+# same. Head-final = complement-before-head: object/clause precedes its verb, a
+# relative clause precedes its noun, an embedded clause precedes its
+# complementizer. (S -> DP VP and S_obj_gap -> DP VP_obj_gap are order-invariant,
+# so the subject stays first in both orders.)
+#
+# Examples (head-initial; head-final is the mirror):
+#   the cat likes the dog                          hi: Subj0_Verb0_Obj0
+#                                                  hf: Subj0_Obj0_Verb0
+#   the cat that chases the mouse likes the dog    hi: Subj0_Verb1_Obj1_Verb0_Obj0
+#                                                  hf: Obj1_Verb1_Subj0_Obj0_Verb0
+#   the cat [that claims that the mouse pursues the bird] likes the dog
+#                                            hi: Subj0_Verb1_Subj2_Verb2_Obj2_Verb0_Obj0
+#   the cat that chases the mouse claims that the dog chases the researcher
+#                                            hi: Subj0_Verb1_Obj1_Verb0_Subj1_Verb1_Obj1
+#   the cat that the mouse fears dances            hi: Subj0_Subj1_Verb1_Verb0
+#   the cat claims a sister likes the dog          hi: Subj0_Verb0_Subj1_Verb1_Obj1
+
+
+def _dp_arg_tags(dp: FrameDP, role: str, depth: int, hi: bool) -> list[str]:
+    """Tags for a subject/object DP: its role token plus any relative clause.
+
+    In head-initial order the role token (the noun) precedes its relative clause;
+    in head-final order the relative clause precedes the noun.
+    """
+    role_tag = [f"{role}{depth}"]
+    rc_tags: list[str] = []
+    if isinstance(dp, FrameDPCommon) and isinstance(dp.nps_frame, FrameNPsRel):
+        rc_tags = _rc_tags(dp.nps_frame.cp_rel, depth + 1, hi)
+    return role_tag + rc_tags if hi else rc_tags + role_tag
+
+
+def _vp_tags(vp: FrameVP, depth: int, hi: bool) -> list[str]:
+    """Tags for a VP: its verb token plus its complement (object DP or clause).
+
+    Head-initial: verb then complement. Head-final: complement then verb.
+    """
+    verb_tag = [f"Verb{depth}"]
+    comp_tags: list[str] = []
+    if isinstance(vp, (FrameVPdp, FrameVPdpAdv)):
+        comp_tags = _dp_arg_tags(vp.dp, "Obj", depth, hi)
+    elif isinstance(vp, (FrameVPcp, FrameVPcpAdv)):
+        comp_tags = structure_tags(vp.cp.s, depth + 1, hi)
+    # FrameVPIntrans / FrameVPIntransAdv: no complement
+    return verb_tag + comp_tags if hi else comp_tags + verb_tag
+
+
+def _rc_tags(cp_rel: FrameCPrel, depth: int, hi: bool) -> list[str]:
+    """Tags for a relative clause (the complementizer C_rel is silent)."""
+    s_gap = cp_rel.s_gap
+    if isinstance(s_gap, FrameSsubjGap):
+        return _vp_tags(s_gap.vp, depth, hi)  # subject gapped -> no Subj
+    # FrameSobjGap: S_obj_gap -> DP VP_obj_gap (order-invariant); object gapped.
+    return _dp_arg_tags(s_gap.dp, "Subj", depth, hi) + [f"Verb{depth}"]
+
+
+def structure_tags(s_frame: FrameS, depth: int = 0, hi: bool = True) -> list[str]:
+    """Per-argument structure tags for a clause and the clauses it embeds."""
+    # S -> DP VP is order-invariant: subject first, then the VP.
+    return _dp_arg_tags(s_frame.dp, "Subj", depth, hi) + _vp_tags(s_frame.vp, depth, hi)
+
+
+def structure(s_frame: FrameS, head_initial: bool = True) -> str:
+    """Underscore-joined structure tag for a sentence frame (see section above)."""
+    return "_".join(structure_tags(s_frame, hi=head_initial))
+
+
+# ---------------------------------------------------------------------------
 # Lexical constraints
 # ---------------------------------------------------------------------------
 
@@ -896,6 +991,8 @@ class FrameSentencePair:
     frame_id: str          # coarse-label skeleton (defines split partition)
     depth: int             # max nesting of any CP (CP_sent or CP_rel)
     tree_height: int       # max leaf depth in the full constituency tree
+    hi_structure: str      # structure tag in head-initial order (see structure())
+    hf_structure: str      # same tag in head-final order
     is_ambiguous: bool = field(default=False)  # set True in run.py cross-frame check
 
     @property
@@ -919,6 +1016,8 @@ class FrameSentencePair:
             "frame_id": self.frame_id,
             "depth": self.depth,
             "tree_height": self.tree_height,
+            "hi_structure": self.hi_structure,
+            "hf_structure": self.hf_structure,
             "is_ambiguous": self.is_ambiguous,
             "n_tokens": len(self.hi_tokens),
         }
@@ -939,6 +1038,8 @@ def sample_pair_from_frame(frame: FrameS, rng: random.Random) -> FrameSentencePa
         frame_id=frame.bracketed_skeleton(fine=False),
         depth=frame.depth(),
         tree_height=compute_tree_height(hi_tree),
+        hi_structure=structure(frame, head_initial=True),
+        hf_structure=structure(frame, head_initial=False),
     )
 
 
