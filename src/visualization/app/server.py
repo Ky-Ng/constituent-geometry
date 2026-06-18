@@ -2,47 +2,95 @@
 
 Controls:
   - experiment:   discovered by scanning ``experiments/*/figures/``
-  - folder levels: a CASCADE of dropdowns, one per directory level. Picking a
-                level repopulates the next with that node's children, so a deep
-                tree like ``vaswani_layer_2/heatmaps/depth3-ex1`` is navigated
-                one segment at a time instead of as one giant flat path. The
-                number of level-dropdowns shown adapts to the chosen branch's
-                depth (extra ones hide); flat single-level layouts show one.
-
-Renders every PNG in the deepest selected folder, stacked. No prettification —
-this is a research scratch viewer.
+  - folder levels: cascading dropdowns, one per directory level.
+  - layer:   multi-select — only shown when the folder/experiment path contains
+             "gpt2" or "vaswani"; hidden for paths with no layer_{N}_ PNGs.
+             Options are populated dynamically from the current folder's PNGs.
+             Selections persist across folder changes; reset on experiment change.
+  - type:    multi-select (cross / decoder_self / encoder_self) — only shown for
+             vaswani paths. Selections persist across folder and experiment changes
+             (it is Input-only, never an Output, so Dash never resets it).
 
 Run on the cluster login node (no GPU needed):
     uv run python -m visualization.app.server
-
-Then on your local machine:
-    ssh -L 8050:localhost:8050 <user>@<carc-login-host>
-    # open http://localhost:8050 in a local browser
-
-If you're already inside a compute job, replace ``<carc-login-host>`` with the
-compute node hostname (e.g. ``c06-02``) and SSH-jump through the login node:
-    ssh -J <user>@<carc-login-host> -L 8050:localhost:8050 <user>@<compute-node>
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from dash import ALL, Dash, Input, Output, ctx, dcc, html
+from dash import ALL, Dash, Input, Output, State, ctx, dcc, html
 from flask import abort, send_from_directory
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXP_ROOT = REPO_ROOT / "experiments"
 
-# Upper bound on how many cascading level-dropdowns we render. The pool is fixed
-# (pattern-matching callbacks need the components to exist up front); unused ones
-# hide. No experiment tree is anywhere near this deep.
 MAX_LEVELS = 8
 
+VASWANI_ATTN_TYPES = ["cross", "decoder_self", "encoder_self"]
+
+
+# ---- PNG attribute parsing --------------------------------------------------
+
+def parse_png_attrs(name: str) -> tuple[str | None, str | None]:
+    """Return (layer_key, attn_type) from a PNG filename.
+
+    New-style (experiments 09+):
+        layer_{N}_attention.png   -> ("layer_N", None)      [GPT2]
+        layer_{N}_{type}.png      -> ("layer_N", type)      [Vaswani]
+    Old-style (experiments 06-08):
+        {slug}_{type}_{view}.png  -> (None, type)           [Vaswani]
+        {slug}_self_{view}.png    -> (None, None)           [GPT2]
+    Unrecognised filenames return (None, None) and always pass through.
+    """
+    # New style: filename starts with layer_{N}_
+    m = re.match(r"^layer_(\d+)_(.*?)\.png$", name)
+    if m:
+        layer_key = f"layer_{m.group(1)}"
+        rest = m.group(2)
+        attn_type = rest if rest in VASWANI_ATTN_TYPES else None
+        return layer_key, attn_type
+
+    # Old style: match from the suffix (longer names first to avoid "self" eating
+    # "decoder_self" / "encoder_self").
+    for at in VASWANI_ATTN_TYPES:
+        for vt in ("per_head", "head_avg"):
+            if name.endswith(f"_{at}_{vt}.png"):
+                return None, at
+
+    return None, None  # GPT2 old-style or unrecognised
+
+
+def list_available_layers(experiment: str, folder: str) -> list[str]:
+    """Sorted list of layer keys ('layer_0', ...) present in the folder's PNGs."""
+    nums: set[int] = set()
+    for name in list_pngs(experiment, folder):
+        m = re.match(r"^layer_(\d+)_", name)
+        if m:
+            nums.add(int(m.group(1)))
+    return [f"layer_{n}" for n in sorted(nums)]
+
+
+def is_gpt2_path(folder_path: str, experiment: str) -> bool:
+    """True when the combined folder + experiment string signals a GPT2 model.
+
+    Checks both so old-style experiments (where the folder itself is plain
+    ``depth1-ex1``) are still classified from the experiment name.
+    """
+    combined = f"{folder_path}/{experiment}".lower()
+    return "gpt2" in combined
+
+
+def is_vaswani_path(folder_path: str, experiment: str) -> bool:
+    combined = f"{folder_path}/{experiment}".lower()
+    return "vaswani" in combined
+
+
+# ---- experiment / folder discovery -----------------------------------------
 
 def discover_experiments() -> list[str]:
-    """Experiment dirs that have at least one subfolder under figures/."""
     out: list[str] = []
     for p in sorted(EXP_ROOT.iterdir()):
         fig = p / "figures"
@@ -52,12 +100,6 @@ def discover_experiments() -> list[str]:
 
 
 def discover_folders(experiment: str) -> list[str]:
-    """Every dir under ``figures/`` that directly holds PNGs, recursively.
-
-    Returns POSIX-style paths relative to ``figures/`` (e.g.
-    ``vaswani/heatmaps/depth3-ex1``), sorted for a stable dropdown order.
-    Recursing means nested figure trees are found, not just the top level.
-    """
     fig = EXP_ROOT / experiment / "figures"
     if not fig.is_dir():
         return []
@@ -68,7 +110,6 @@ def discover_folders(experiment: str) -> list[str]:
 
 
 def list_pngs(experiment: str, folder: str) -> list[str]:
-    """PNG filenames directly inside ``figures/<folder>`` (``folder`` may nest)."""
     d = EXP_ROOT / experiment / "figures" / folder
     if not d.is_dir():
         return []
@@ -76,12 +117,8 @@ def list_pngs(experiment: str, folder: str) -> list[str]:
 
 
 # ---- cascading-dropdown navigation -----------------------------------------
-# discover_folders() gives the flat list of PNG-holding paths; build_tree turns
-# those into a nested dict so the UI can drill one segment at a time. A node's
-# children are its sub-segments; a LEAF (empty dict) is a directory that holds
-# PNGs directly.
+
 def build_tree(experiment: str) -> dict:
-    """Nested {segment: subtree} of every PNG-holding path under figures/."""
     tree: dict = {}
     for folder in discover_folders(experiment):
         node = tree
@@ -91,14 +128,8 @@ def build_tree(experiment: str) -> dict:
 
 
 def normalize_path(tree: dict, desired: list[str | None]) -> list[str]:
-    """Resolve a (possibly partial/stale) selection into a full path to a leaf.
-
-    Walks from the root following ``desired`` where each segment is a valid child,
-    else defaulting to the first child, until a leaf (no children) is reached. So
-    a fresh experiment or a just-changed upper level auto-fills the deeper levels.
-    """
     node, path, i = tree, [], 0
-    while node:                                   # node has children -> another level
+    while node:
         seg = desired[i] if i < len(desired) and desired[i] in node else sorted(node)[0]
         path.append(seg)
         node = node[seg]
@@ -107,7 +138,6 @@ def normalize_path(tree: dict, desired: list[str | None]) -> list[str]:
 
 
 def levels_along_path(tree: dict, path: list[str]) -> list[tuple[list[str], str]]:
-    """For each level on ``path``, the (sibling options, chosen value) at that level."""
     out, node = [], tree
     for seg in path:
         out.append((sorted(node), seg))
@@ -115,13 +145,36 @@ def levels_along_path(tree: dict, path: list[str]) -> list[tuple[list[str], str]
     return out
 
 
-def render_images(experiment: str, folder: str):
-    """The stacked-PNG gallery for one (already-resolved) folder path."""
+# ---- gallery rendering ------------------------------------------------------
+
+def render_images(experiment: str, folder: str,
+                  layer_sel: list[str] | None,
+                  attn_sel: list[str] | None,
+                  gpt2_mode: bool):
+    """Stacked-PNG gallery filtered by selected layers and (for Vaswani) types.
+
+    A PNG is shown when:
+    - Its layer_key (if any) is in layer_sel (or layer_sel is None/empty).
+    - gpt2_mode is False AND its attn_type (if any) is in attn_sel.
+    PNGs with unrecognised names always pass through.
+    """
     if not folder:
         return html.Em("nothing selected")
-    pngs = list_pngs(experiment, folder)
-    if not pngs:
-        return html.Em(f"no PNGs in {folder}")
+
+    layer_set = set(layer_sel) if layer_sel else None
+    attn_set  = set(attn_sel)  if attn_sel  else None
+
+    filtered = []
+    for name in list_pngs(experiment, folder):
+        lk, at = parse_png_attrs(name)
+        if lk is not None and layer_set is not None and lk not in layer_set:
+            continue
+        if not gpt2_mode and at is not None and attn_set is not None and at not in attn_set:
+            continue
+        filtered.append(name)
+
+    if not filtered:
+        return html.Em(f"no PNGs match the current filter in {folder}")
     return [
         html.Div(
             style={"marginBottom": "16px"},
@@ -133,20 +186,18 @@ def render_images(experiment: str, folder: str):
                 ),
             ],
         )
-        for name in pngs
+        for name in filtered
     ]
 
+
+# ---- Dash app ---------------------------------------------------------------
 
 app = Dash(__name__)
 app.title = "attention heatmaps"
 
 
-# ``folder`` is a <path:> converter so it can span nested dirs (it matches
-# slashes); ``filename`` greedily binds the final segment.
 @app.server.route("/figure/<experiment>/<path:folder>/<filename>")
 def serve_figure(experiment: str, folder: str, filename: str):
-    # Path-traversal guard. ``folder`` is allowed to contain '/' (it's a nested
-    # subpath), but never '..'; experiment/filename stay single segments.
     if "/" in experiment or "/" in filename:
         abort(400)
     for part in (experiment, folder, filename):
@@ -159,16 +210,14 @@ def serve_figure(experiment: str, folder: str, filename: str):
 
 
 _init_exps = discover_experiments()
-
-# Hidden style for an unused level-dropdown; the navigate callback flips levels
-# on/off by swapping this for the visible style below.
-_HIDDEN = {"width": "240px", "display": "none"}
+_HIDDEN  = {"width": "240px", "display": "none"}
 _VISIBLE = {"width": "240px"}
 
 app.layout = html.Div(
     style={"fontFamily": "monospace", "padding": "12px"},
     children=[
         html.H3("attention heatmaps"),
+        # Row 1: experiment + cascading folder dropdowns
         html.Div(
             style={"display": "flex", "gap": "12px", "alignItems": "center",
                    "flexWrap": "wrap"},
@@ -182,8 +231,6 @@ app.layout = html.Div(
                     style={"width": "560px"},
                 ),
                 html.Label("folder:"),
-                # Fixed pool of cascading level-dropdowns; the callback fills the
-                # active ones and hides the rest. Populated on initial load.
                 *[
                     dcc.Dropdown(
                         id={"type": "level", "index": k},
@@ -195,6 +242,48 @@ app.layout = html.Div(
                 ],
             ],
         ),
+        # Row 2: contextual filter checkboxes
+        #
+        # layer-container: shown when the current folder has layer_{N}_ PNGs.
+        #   Options are dynamic (Output); value is also Output but computed to
+        #   persist user selections across folder changes (reset on exp change).
+        #
+        # attn-type-container: shown for vaswani paths only.
+        #   Options are fixed. Value is Input-only — Dash never resets it,
+        #   so selections persist unconditionally (across folders AND experiments).
+        html.Div(
+            style={"display": "flex", "gap": "24px", "alignItems": "flex-start",
+                   "marginTop": "8px", "flexWrap": "wrap"},
+            children=[
+                html.Div(
+                    id="layer-container",
+                    style={"display": "none"},
+                    children=[
+                        html.Label("layer:", style={"marginRight": "8px"}),
+                        dcc.Checklist(
+                            id="layer-filter",
+                            options=[],
+                            value=[],
+                            inline=True,
+                        ),
+                    ],
+                ),
+                html.Div(
+                    id="attn-type-container",
+                    style={"display": "none"},
+                    children=[
+                        html.Label("type:", style={"marginRight": "8px"}),
+                        dcc.Checklist(
+                            id="attn-type-filter",
+                            options=[{"label": f" {t}", "value": t}
+                                     for t in VASWANI_ATTN_TYPES],
+                            value=VASWANI_ATTN_TYPES[:],
+                            inline=True,
+                        ),
+                    ],
+                ),
+            ],
+        ),
         html.Hr(),
         html.Div(id="gallery"),
     ],
@@ -202,27 +291,22 @@ app.layout = html.Div(
 
 
 def resolve(experiment: str | None, level_values: list[str | None],
-            changed_index: int | None):
-    """Pure cascade logic (no Dash context), kept separate so it's unit-testable.
-
-    ``changed_index`` is the level-dropdown the user just changed, or None when the
-    experiment changed / on first load. Returns the four callback outputs:
-    (options, values, styles, gallery), each list sized MAX_LEVELS.
-    """
-    empty = ([[]] * MAX_LEVELS, [None] * MAX_LEVELS, [_HIDDEN] * MAX_LEVELS)
+            changed_index: int | None,
+            layer_sel: list[str] | None,
+            attn_sel: list[str] | None,
+            trig_id):
+    """Cascade + filter logic, kept pure so it's unit-testable."""
+    empty_cascade = ([[]] * MAX_LEVELS, [None] * MAX_LEVELS, [_HIDDEN] * MAX_LEVELS)
     if not experiment:
-        return (*empty, html.Em("nothing selected"))
+        return (*empty_cascade, html.Em("nothing selected"),
+                [], [], {"display": "none"}, {"display": "none"})
 
     tree = build_tree(experiment)
     if not tree:
-        return (*empty, html.Em("no figures"))
+        return (*empty_cascade, html.Em("no figures"),
+                [], [], {"display": "none"}, {"display": "none"})
 
-    # How much of the prior selection survives:
-    #  - experiment changed (changed_index is None): start fresh from the root.
-    #  - level k changed: keep picks 0..k, drop the now-stale deeper ones so they
-    #    re-default within the newly chosen branch.
     desired = level_values[: changed_index + 1] if changed_index is not None else []
-
     path = normalize_path(tree, desired)
     levels = levels_along_path(tree, path)
 
@@ -238,7 +322,38 @@ def resolve(experiment: str | None, level_values: list[str | None],
             value_out.append(None)
             style_out.append(_HIDDEN)
 
-    return options_out, value_out, style_out, render_images(experiment, "/".join(path))
+    folder = "/".join(path)
+    gpt2    = is_gpt2_path(folder, experiment)
+    vaswani = is_vaswani_path(folder, experiment)
+
+    # --- layer filter ---
+    available = list_available_layers(experiment, folder)
+    is_exp_change = trig_id == "experiment" or trig_id is None
+    if is_exp_change or layer_sel is None:
+        # Reset to all available on experiment change or first load.
+        new_layer_value = available
+    elif changed_index is not None:
+        # Folder changed: keep selections that still exist in the new folder.
+        # If nothing survives (completely different set), fall back to all.
+        kept = [l for l in layer_sel if l in available]
+        new_layer_value = kept if kept else available
+    else:
+        # Filter change or other: pass through unchanged.
+        new_layer_value = layer_sel if layer_sel is not None else available
+
+    layer_opts = [{"label": f" {l}", "value": l} for l in available]
+    layer_container_style = {} if available else {"display": "none"}
+
+    # --- attn type filter ---
+    # Visibility only; value is Input-only and persists naturally.
+    attn_container_style = {} if vaswani else {"display": "none"}
+
+    gallery = render_images(experiment, folder, new_layer_value, attn_sel, gpt2)
+
+    return (options_out, value_out, style_out,
+            gallery,
+            layer_opts, new_layer_value, layer_container_style,
+            attn_container_style)
 
 
 @app.callback(
@@ -246,19 +361,23 @@ def resolve(experiment: str | None, level_values: list[str | None],
     Output({"type": "level", "index": ALL}, "value"),
     Output({"type": "level", "index": ALL}, "style"),
     Output("gallery", "children"),
+    Output("layer-filter", "options"),
+    Output("layer-filter", "value"),
+    Output("layer-container", "style"),
+    Output("attn-type-container", "style"),
     Input("experiment", "value"),
     Input({"type": "level", "index": ALL}, "value"),
+    Input("layer-filter", "value"),
+    Input("attn-type-filter", "value"),
 )
-def navigate(experiment: str | None, level_values: list[str | None]):
-    """Thin callback wrapper: read which input fired from ctx, delegate to resolve."""
+def navigate(experiment: str | None, level_values: list[str | None],
+             layer_sel: list[str] | None, attn_sel: list[str] | None):
     trig = ctx.triggered_id
     changed = trig["index"] if isinstance(trig, dict) and trig.get("type") == "level" else None
-    return resolve(experiment, level_values, changed)
+    return resolve(experiment, level_values, changed, layer_sel, attn_sel, trig)
 
 
 def main() -> None:
-    # 127.0.0.1 only: rely on SSH port-forwarding for remote access. Bind to
-    # 0.0.0.0 if you intentionally want LAN exposure.
     app.run(host="127.0.0.1", port=8050, debug=False)
 
 
