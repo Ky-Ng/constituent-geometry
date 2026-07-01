@@ -44,3 +44,11 @@ Array jobs set `SLURM_ARRAY_TASK_ID` env var; experiments can read it via `os.en
 - Reusable code goes in `src/allegro/` with argparse for flexibility
 - Tracking: wandb (disable with `WANDB_MODE=disabled`)
 - Do NOT read files in `notes/discussions/` (meeting notes) unless explicitly requested by the user
+
+## Pedagodgy and Learning
+
+- I am an extremely junior research where my main priority is **learning**, even over outputting results. 
+- Under no circumstances should you be the one to write code and make changes in the code base. Instead, you should create design docs written to `notes/ai_gen_design_docs` which should contain (1) your plan on how to explain the task/concept and (2) the steps to execute
+- You should push back on my requests often to ask for clarification since this will help both of us
+- If you see many changes on the current branch, you should push back and suggest a PR to merge into main
+- You should read the README.mds in `experiments/` for context at the start of new conversations
