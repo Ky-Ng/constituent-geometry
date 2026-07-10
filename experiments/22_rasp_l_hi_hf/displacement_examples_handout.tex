@@ -1,0 +1,473 @@
+\documentclass[11pt]{article}
+
+% ---------------------------------------------------------------------------
+% Worked examples: additive displacement across every modifier type.
+% Compile:  module load texlive/2025 && pdflatex displacement_examples_handout.tex
+%           (run twice; forest/tikz need a second pass)
+% Companion to displacement_handout.tex.  Every number below is machine-verified
+% against grammar_oracle.py via _verify_examples.py.
+% ---------------------------------------------------------------------------
+
+\usepackage[margin=2.0cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,calc,arrows.meta,decorations.pathreplacing,fit,backgrounds}
+\usepackage{forest}
+\usepackage[most]{tcolorbox}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage{microtype}
+
+% --- palette ---------------------------------------------------------------
+\definecolor{headc}{HTML}{1B7F3B}   % head child  (green)
+\definecolor{compc}{HTML}{1F5FBF}   % complement child (blue)
+\definecolor{flipc}{HTML}{C0392B}   % flip node (red)
+\definecolor{invc}{HTML}{555555}    % invariant / stationary (gray)
+\definecolor{panel}{HTML}{F4F1EA}
+
+\newcommand{\head}[1]{\textcolor{headc}{#1}}
+\newcommand{\comp}[1]{\textcolor{compc}{#1}}
+\newcommand{\flip}[1]{\textcolor{flipc}{#1}}
+\newcommand{\swap}{\ensuremath{\mathbin{\textcolor{flipc}{\rightleftarrows}}}}
+
+% --- callout boxes ---------------------------------------------------------
+\newtcolorbox{rulebox}[1][]{colback=panel,colframe=black!70,boxrule=0.6pt,
+  arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,title={#1},fonttitle=\bfseries}
+\newtcolorbox{keybox}[1][]{colback=flipc!6,colframe=flipc!75,boxrule=0.8pt,
+  arc=2pt,left=6pt,right=6pt,top=4pt,bottom=4pt,title={#1},fonttitle=\bfseries}
+
+% --- forest style: highlight flip nodes ------------------------------------
+\forestset{
+  default preamble={
+    for tree={font=\small, edge={-, gray}, l sep=9pt, s sep=6pt,
+              inner sep=1.6pt, align=center}
+  },
+  flip/.style={draw=flipc, very thick, rounded corners=2pt, text=flipc},
+  inv/.style ={draw=invc!55, thick, rounded corners=2pt, text=invc},
+  leaf/.style={font=\small\itshape, text=black},
+}
+
+% --- token-flow diagram helper --------------------------------------------
+% \tokflow{dx}{ HI list }{ HF list }{ arc list }
+\newcommand{\tokflow}[4]{%
+\begin{tikzpicture}[
+   tok/.style={draw=black!55, fill=white, rounded corners=1.5pt,
+               minimum height=6.5mm, inner xsep=3pt, font=\footnotesize},
+   every node/.style={anchor=center}]
+  \def\dx{#1}
+  \foreach \i/\lab in {#2}{ \node[tok] (hi\i) at (\i*\dx,2.35) {\lab}; }
+  \foreach \m/\lab in {#3}{ \node[tok] (hf\m) at (\m*\dx,0) {\lab}; }
+  \node[font=\scriptsize\bfseries, text=invc] at (-1.05,2.35) {HI};
+  \node[font=\scriptsize\bfseries, text=invc] at (-1.05,0)    {HF};
+  \foreach \a/\b/\c/\t in {#4}{
+     \draw[\c, line width=1.1pt, -{Stealth[length=4pt]}, opacity=0.9]
+        (hi\a.south) to[out=-90,in=90] node[midway, sloped, above=-1pt,
+        font=\tiny, text=\c]{\t} (hf\b.north);
+  }
+\end{tikzpicture}}
+% -------------------------------------------------------------------------
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries Displacement, Worked Example by Example}\\[2pt]
+  {\large Filling in \;$\text{disp}(x)=\sum_F(\cdots)$\; for relative clauses, adjectives, adverbs, determiners}\\[2pt]
+  {\small Companion to \texttt{displacement\_handout.tex} \; (\texttt{experiments/22\_rasp\_l\_hi\_hf})}
+\end{center}
+\vspace{-2pt}\hrule\vspace{6pt}
+
+% ==========================================================================
+\section*{0.\quad The one rule we fill in every time}
+
+Head-final (HF) is a permutation of head-initial (HI): each token keeps its identity and only
+moves. Its target slot is its start index plus a \emph{displacement}, and the displacement is a
+\textbf{sum of one $\pm$ per \flip{flip} node the token sits inside}:
+
+\begin{keybox}[The master formula]
+\vspace{-4pt}
+\[
+  \text{hf\_pos}(x)=\text{hi\_pos}(x)+\text{disp}(x),
+  \qquad
+  \text{disp}(x)=\!\!\sum_{\substack{F\ \text{a \flip{flip} node}\\ \text{whose span contains }x}}\!\!
+  \begin{cases}\head{+\,|\text{comp}(F)|} & x\in\head{\text{head}(F)}\\[2pt]
+               \comp{-\,|\text{head}(F)|} & x\in\comp{\text{comp}(F)}\end{cases}
+\]
+\vspace{-8pt}
+\end{keybox}
+
+\noindent Which nodes are \flip{flips} (reverse their two children) versus
+\textcolor{invc}{invariant} (keep child order) is fixed by the grammar:
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+\flip{\textbf{Flip}} (head\,$\mid$\,comp reverse) & \textcolor{invc}{\textbf{Invariant}} (order kept)\\
+\midrule
+\texttt{CP\_sent}=[\head{C}$\mid$\comp{S}], \ \texttt{CP\_rel}=[\head{C\_rel}$\mid$\comp{S\_gap}]
+  & \texttt{S}=[subj$\mid$VP], \ \texttt{DP}=[D$\mid$NP]\\
+\texttt{VP}=[\head{V(+Adv)}$\mid$\comp{obj/clause}]
+  & \texttt{S\_obj\_gap}=[DP$\mid$V], \ \texttt{NP\_singular\_adj}=[Adj$\mid$N]\\
+\texttt{VP\_*\_adv}=[\head{V}$\mid$\comp{Adv}], \ \texttt{NP\_singular}=[\head{noun}$\mid$\comp{rel.\ clause}]
+  & every \emph{unary} node (one child)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{rulebox}[How to read each example]
+\textbf{(1)} draw the tree, tag \flip{flip}/\textcolor{invc}{invariant} nodes; \quad
+\textbf{(2)} list each flip's $|\head{\text{head}}|,|\comp{\text{comp}}|$; \quad
+\textbf{(3)} for each token, add one term per enclosing flip (\head{$+|\text{comp}|$} if it is in
+that flip's head, \comp{$-|\text{head}|$} if in its comp); \quad
+\textbf{(4)} sum $\Rightarrow$ \texttt{disp}, then $\text{hf\_pos}=i+\text{disp}$. In the tables,
+\head{green $+$} = a head contribution, \comp{blue $-$} = a comp contribution.
+\end{rulebox}
+
+% ==========================================================================
+\section*{1.\quad Relative clauses (three types)}
+
+A relative clause attaches by the flip \texttt{NP\_singular}=[\head{core noun}$\mid$\comp{CP\_rel}]:
+the whole clause jumps in \emph{front} of the noun it modifies. Inside, \texttt{CP\_rel}=[\head{that}$\mid$\comp{S\_gap}]
+is a second flip. What differs between the three types is the \emph{gap clause} \comp{S\_gap} --
+and, crucially, whether it contains any \emph{further} flip.
+
+% -------------------------------------------------------------------------
+\subsection*{1a.\quad Subject-gap, intransitive \; -- \; \emph{the boy that swims dances}}
+\textbf{HI:} the boy that swims dances \qquad$\rightarrow$\qquad \textbf{HF:} the swims that boy dances
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv
+  [D[{the},leaf]]
+  [{NP\_singular\,\swap},flip
+   [N[{boy},leaf]]
+   [{CP\_rel\,\swap},flip
+    [{C\_rel}[{that},leaf]]
+    [{S\_subj\_gap},inv [VP,inv [V[{swims},leaf]]]]
+   ]
+  ]
+ ]
+ [VP,inv [V[{dances},leaf]]]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{NP\_singular}: $|\head{\text{head}}|{=}1$ (\emph{boy}), $|\comp{\text{comp}}|{=}2$ (\emph{that swims}).\quad
+\texttt{CP\_rel}: $|\head{\text{head}}|{=}1$ (\emph{that}), $|\comp{\text{comp}}|{=}1$ (\emph{swims}).
+The gap clause \texttt{S\_subj\_gap}$\to$\texttt{VP}$\to$\emph{swims} is a chain of \emph{unary} (invariant) nodes -- no flip inside.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+the (0)    & (no enclosing flip)                                  & $0$  & 0\\
+boy (1)    & \head{$+2$}\,(NP.head)                                & $+2$ & 3\\
+that (2)   & $-1$(NP.comp) \ \head{$+1$}(CPrel.head)               & $0$  & 2\\
+swims (3)  & $-1$(NP.comp) \ $-1$(CPrel.comp)                      & $-2$ & 1\\
+dances (4) & (no enclosing flip)                                  & $0$  & 4\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{1.95}
+  {0/the, 1/boy, 2/that, 3/swims, 4/dances}
+  {0/the, 1/swims, 2/that, 3/boy, 4/dances}
+  {0/0/invc/0, 1/3/headc/{+2}, 2/2/invc/0, 3/1/compc/{-2}, 4/4/invc/0}
+\end{center}
+
+\noindent\emph{Takeaway.} \emph{that} lands back on $0$: its $\head{+1}$ as CP\_rel head exactly
+cancels its $-1$ as NP comp. \emph{swims} (the whole gap clause) collects two $-1$'s and slides
+left of the noun it modifies.
+
+% -------------------------------------------------------------------------
+\subsection*{1b.\quad Subject-gap, transitive \; -- \; \emph{the boy that chases the dog swims}}
+\textbf{HI:} the boy that chases the dog swims \quad$\rightarrow$\quad \textbf{HF:} the the dog chases that boy swims
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv
+  [D[{the},leaf]]
+  [{NP\_singular\,\swap},flip
+   [N[{boy},leaf]]
+   [{CP\_rel\,\swap},flip
+    [{C\_rel}[{that},leaf]]
+    [{S\_subj\_gap},inv
+     [{VP\,\swap},flip
+       [V[{chases},leaf]]
+       [DP,inv[D[{the},leaf]][N[{dog},leaf]]]
+     ]
+    ]
+   ]
+  ]
+ ]
+ [VP,inv [V[{swims},leaf]]]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{NP\_singular}: $|\head{\text{head}}|{=}1$, $|\comp{\text{comp}}|{=}4$ (\emph{that chases the dog}).\quad
+\texttt{CP\_rel}: $|\head{\text{head}}|{=}1$, $|\comp{\text{comp}}|{=}3$ (\emph{chases the dog}).\quad
+\texttt{VP}: $|\head{\text{head}}|{=}1$ (\emph{chases}), $|\comp{\text{comp}}|{=}2$ (\emph{the dog}).
+The subject gap holds a \emph{transitive} VP, so a \textbf{third} flip appears inside.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+the (0)    & (no enclosing flip)                                              & $0$  & 0\\
+boy (1)    & \head{$+4$}\,(NP.head)                                            & $+4$ & 5\\
+that (2)   & $-1$(NP.comp) \ \head{$+3$}(CPrel.head)                           & $+2$ & 4\\
+chases (3) & $-1$(NP.comp) \ $-1$(CPrel.comp) \ \head{$+2$}(VP.head)           & $0$  & 3\\
+the (4)    & $-1$(NP.comp) \ $-1$(CPrel.comp) \ $-1$(VP.comp)                  & $-3$ & 1\\
+dog (5)    & $-1$(NP.comp) \ $-1$(CPrel.comp) \ $-1$(VP.comp)                  & $-3$ & 2\\
+swims (6)  & (no enclosing flip)                                              & $0$  & 6\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{1.75}
+  {0/the, 1/boy, 2/that, 3/chases, 4/the, 5/dog, 6/swims}
+  {0/the, 1/the, 2/dog, 3/chases, 4/that, 5/boy, 6/swims}
+  {0/0/invc/0, 1/5/headc/{+4}, 2/4/headc/{+2}, 3/3/invc/0, 4/1/compc/{-3}, 5/2/compc/{-3}, 6/6/invc/0}
+\end{center}
+
+\noindent\emph{Takeaway.} \emph{chases} is a flip \head{head} ($+2$) yet ends stationary --- the
+two outer $-1$'s cancel its $+2$. The object \emph{the dog} is buried under \emph{three} comps, so
+it takes the full $-3$.
+
+% -------------------------------------------------------------------------
+\subsection*{1c.\quad Object-gap \; -- \; \emph{the dog that the boy chases swims}}
+\textbf{HI:} the dog that the boy chases swims \quad$\rightarrow$\quad \textbf{HF:} the the boy chases that dog swims
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv
+  [D[{the},leaf]]
+  [{NP\_singular\,\swap},flip
+   [N[{dog},leaf]]
+   [{CP\_rel\,\swap},flip
+    [{C\_rel}[{that},leaf]]
+    [{S\_obj\_gap},inv
+     [DP,inv[D[{the},leaf]][N[{boy},leaf]]]
+     [{VP\_obj\_gap},inv[V[{chases},leaf]]]
+    ]
+   ]
+  ]
+ ]
+ [VP,inv [V[{swims},leaf]]]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{NP\_singular}: $|\head{\text{head}}|{=}1$, $|\comp{\text{comp}}|{=}4$ (\emph{that the boy chases}).\quad
+\texttt{CP\_rel}: $|\head{\text{head}}|{=}1$, $|\comp{\text{comp}}|{=}3$ (\emph{the boy chases}).\quad
+Now the gap clause is \texttt{S\_obj\_gap}=[DP$\mid$V], which is \textbf{invariant}, and
+\texttt{VP\_obj\_gap} is a bare unary verb -- so unlike 1b there is \textbf{no third flip}.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+the (0)    & (no enclosing flip)                          & $0$  & 0\\
+dog (1)    & \head{$+4$}\,(NP.head)                        & $+4$ & 5\\
+that (2)   & $-1$(NP.comp) \ \head{$+3$}(CPrel.head)       & $+2$ & 4\\
+the (3)    & $-1$(NP.comp) \ $-1$(CPrel.comp)              & $-2$ & 1\\
+boy (4)    & $-1$(NP.comp) \ $-1$(CPrel.comp)              & $-2$ & 2\\
+chases (5) & $-1$(NP.comp) \ $-1$(CPrel.comp)              & $-2$ & 3\\
+swims (6)  & (no enclosing flip)                          & $0$  & 6\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{1.75}
+  {0/the, 1/dog, 2/that, 3/the, 4/boy, 5/chases, 6/swims}
+  {0/the, 1/the, 2/boy, 3/chases, 4/that, 5/dog, 6/swims}
+  {0/0/invc/0, 1/5/headc/{+4}, 2/4/headc/{+2}, 3/1/compc/{-2}, 4/2/compc/{-2}, 5/3/compc/{-2}, 6/6/invc/0}
+\end{center}
+
+\begin{keybox}[Subject-gap vs.\ object-gap: the one row that differs]
+Compare \emph{chases} across 1b and 1c. In 1b (subject gap) it heads a transitive \texttt{VP}
+flip, so it gets an extra \head{$+2$} and nets $0$. In 1c (object gap) the verb sits in an
+\emph{invariant} \texttt{S\_obj\_gap} with its object already relativized away -- \emph{no verb
+flip} -- so it only inherits the two $-1$ pushes and nets $-2$. Same two outer flips, different
+\emph{inside}: object gaps keep ``\comp{the boy chases}'' rigid; subject gaps reverse ``chases\,$\mid$\,the dog''.
+\end{keybox}
+
+% ==========================================================================
+\section*{2.\quad Adjectives \; -- \; \emph{John likes the attractive dog}}
+\textbf{HI:} John likes the attractive dog \qquad$\rightarrow$\qquad \textbf{HF:} John the attractive dog likes
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv[N[{John},leaf]]]
+ [{VP\,\swap},flip
+  [V[{likes},leaf]]
+  [DP,inv
+   [D[{the},leaf]]
+   [{NP\_singular\_adj},inv
+    [Adj[{attractive},leaf]]
+    [N[{dog},leaf]]
+   ]
+  ]
+ ]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{VP}: $|\head{\text{head}}|{=}1$ (\emph{likes}), $|\comp{\text{comp}}|{=}3$ (\emph{the attractive dog}).
+The adjective's node \texttt{NP\_singular\_adj} is \textbf{invariant}: an adjective \emph{never}
+reorders with its noun, and only rides along inside the enclosing flip.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+John (0)       & (no enclosing flip)   & $0$  & 0\\
+likes (1)      & \head{$+3$}\,(VP.head) & $+3$ & 4\\
+the (2)        & $-1$(VP.comp)          & $-1$ & 1\\
+attractive (3) & $-1$(VP.comp)          & $-1$ & 2\\
+dog (4)        & $-1$(VP.comp)          & $-1$ & 3\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{2.15}
+  {0/John, 1/likes, 2/the, 3/attractive, 4/dog}
+  {0/John, 1/the, 2/attractive, 3/dog, 4/likes}
+  {0/0/invc/0, 1/4/headc/{+3}, 2/1/compc/{-1}, 3/2/compc/{-1}, 4/3/compc/{-1}}
+\end{center}
+
+\noindent\emph{Takeaway.} \emph{the attractive dog} moves as one rigid block: all three tokens get
+the \emph{same} $-1$ (the VP comp), so their internal order -- determiner, adjective, noun -- is
+preserved. An adjective adds nothing new to the displacement rule; it only makes the complement it
+lives in one token \emph{larger}, which shows up as a bigger \head{$+|\text{comp}|$} on the verb.
+
+% ==========================================================================
+\section*{3.\quad Adverbs \; -- \; \emph{John chases quickly the dog}}
+\textbf{HI:} John chases quickly the dog \qquad$\rightarrow$\qquad \textbf{HF:} John the dog quickly chases
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv[N[{John},leaf]]]
+ [{VP\,\swap},flip
+  [{VP\_dp\_adv\,\swap},flip
+   [V[{chases},leaf]]
+   [Adv[{quickly},leaf]]
+  ]
+  [DP,inv[D[{the},leaf]][N[{dog},leaf]]]
+ ]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{VP}: head block $=$ \texttt{VP\_dp\_adv} (\emph{chases quickly}, $|\head{\text{head}}|{=}2$), comp $=$ \emph{the dog} ($|\comp{\text{comp}}|{=}2$).\quad
+\texttt{VP\_dp\_adv}: $|\head{\text{head}}|{=}1$ (\emph{chases}), $|\comp{\text{comp}}|{=}1$ (\emph{quickly}).
+An adverb sits in \textbf{two} flips at once: the \emph{local} verb--adverb swap and the outer VP block-swap.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+John (0)    & (no enclosing flip)                              & $0$  & 0\\
+chases (1)  & \head{$+2$}(VP.head) \ \head{$+1$}(Vadv.head)    & $+3$ & 4\\
+quickly (2) & \head{$+2$}(VP.head) \ $-1$(Vadv.comp)           & $+1$ & 3\\
+the (3)     & $-2$(VP.comp)                                    & $-2$ & 1\\
+dog (4)     & $-2$(VP.comp)                                    & $-2$ & 2\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{2.1}
+  {0/John, 1/chases, 2/quickly, 3/the, 4/dog}
+  {0/John, 1/the, 2/dog, 3/quickly, 4/chases}
+  {0/0/invc/0, 1/4/headc/{+3}, 2/3/headc/{+1}, 3/1/compc/{-2}, 4/2/compc/{-2}}
+\end{center}
+
+\noindent\emph{Takeaway.} \emph{quickly} is the \head{head} of the outer VP block ($\head{+2}$, it
+jumps over \emph{the dog} with the verb) but the \comp{comp} of the inner \texttt{VP\_dp\_adv}
+($-1$, it falls behind the verb locally). Net $+1$. The verb \emph{chases} is a head of \emph{both}
+flips, so it collects $\head{+2}\,\head{+1}=+3$. Note the object's push is now $-2$, not $-1$,
+because the head block it jumps back over has \emph{size 2} (verb $+$ adverb).
+
+% ==========================================================================
+\section*{4.\quad Determiners \; -- \; \emph{the dog chases the cat}}
+\textbf{HI:} the dog chases the cat \qquad$\rightarrow$\qquad \textbf{HF:} the dog the cat chases
+
+\begin{center}
+\begin{forest}
+[S,inv
+ [DP,inv[D[{the},leaf]][N[{dog},leaf]]]
+ [{VP\,\swap},flip
+  [V[{chases},leaf]]
+  [DP,inv[D[{the},leaf]][N[{cat},leaf]]]
+ ]
+]
+\end{forest}
+\end{center}
+
+\noindent\textbf{Flip nodes.}\quad
+\texttt{VP}: $|\head{\text{head}}|{=}1$ (\emph{chases}), $|\comp{\text{comp}}|{=}2$ (\emph{the cat}).\quad
+Both \texttt{DP}=[D$\mid$N] nodes are \textbf{invariant}: a determiner never swaps with its noun.
+
+\begin{center}\small
+\begin{tabular}{@{}rll r@{}}
+\toprule
+tok ($i$) & $\text{disp}=\sum_F(\cdots)$ & $=$disp & hf\\
+\midrule
+the (0)    & (subject DP; no enclosing flip)  & $0$  & 0\\
+dog (1)    & (subject DP; no enclosing flip)  & $0$  & 1\\
+chases (2) & \head{$+2$}\,(VP.head)            & $+2$ & 4\\
+the (3)    & $-1$(VP.comp)                     & $-1$ & 2\\
+cat (4)    & $-1$(VP.comp)                     & $-1$ & 3\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\tokflow{2.1}
+  {0/the, 1/dog, 2/chases, 3/the, 4/cat}
+  {0/the, 1/dog, 2/the, 3/cat, 4/chases}
+  {0/0/invc/0, 1/1/invc/0, 2/4/headc/{+2}, 3/2/compc/{-1}, 4/3/compc/{-1}}
+\end{center}
+
+\noindent\emph{Takeaway.} The two determiners behave oppositely \emph{only} because of what
+encloses them, never because of any determiner-specific rule. The \emph{subject} \emph{the}(0) sits
+under an invariant \texttt{S}/\texttt{DP} with no flip above it $\Rightarrow$ it does not move. The
+\emph{object} \emph{the}(3) is inside the VP comp $\Rightarrow$ it gets the same $-1$ as its noun
+and stays glued in front of \emph{cat}.
+
+\begin{rulebox}[A determiner subtlety, seen back in Section 1]
+In the relative-clause examples the head DP is \texttt{DP}=[\emph{the}$\mid$\texttt{NP\_singular}].
+The flip is \texttt{NP\_singular}=[\head{noun}$\mid$\comp{CP\_rel}] -- and the determiner \emph{the}
+is a \emph{sibling} of that flip, \emph{not inside} it. That is exactly why \emph{the}(0) stays at
+$0$ while \emph{boy}/\emph{dog}(1) jumps \head{$+4$}: only the noun is the flip's head; its
+determiner is left behind. ``Contains'' in the master formula is literal.
+\end{rulebox}
+
+\vfill
+\begin{center}\footnotesize\itshape
+Every HI/HF pair and every \texttt{disp}/\texttt{hf\_pos} column above is machine-verified against
+\texttt{grammar\_oracle.py} (see \texttt{\_verify\_examples.py}).
+\end{center}
+
+\end{document}

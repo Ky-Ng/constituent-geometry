@@ -1,0 +1,11 @@
+N=5000 seed=1 secs=74.6 depths={0: 2305, 1: 1458, 2: 1237} maxlen=28 oracle_bad=0
+_s2_closer: 5000/5000 = 1.000000  fails=0
+_s2_interval: 5000/5000 = 1.000000  fails=0
+_s2_gaplca: 5000/5000 = 1.000000  fails=0
+_s2_twolevel: 5000/5000 = 1.000000  fails=0
+-----
+N=5000 seed=2 secs=74.4 depths={0: 2357, 2: 1242, 1: 1401} maxlen=32 oracle_bad=0
+_s2_closer: 5000/5000 = 1.000000  fails=0
+_s2_interval: 5000/5000 = 1.000000  fails=0
+_s2_gaplca: 5000/5000 = 1.000000  fails=0
+_s2_twolevel: 5000/5000 = 1.000000  fails=0

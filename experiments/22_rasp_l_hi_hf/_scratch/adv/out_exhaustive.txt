@@ -1,0 +1,13 @@
+LMAX=11 K=4 only_d2=0: 1021 frames to test
+tested=4084 secs=66.3 oracle_bad=0 maxlen=11
+_s2_closer: 4084/4084 = 1.000000  fails=0
+_s2_interval: 4084/4084 = 1.000000  fails=0
+_s2_gaplca: 4084/4084 = 1.000000  fails=0
+_s2_twolevel: 4084/4084 = 1.000000  fails=0
+==== depth-2 only ====
+LMAX=13 K=6 only_d2=1: 2332 frames to test
+tested=13992 secs=298.4 oracle_bad=0 maxlen=13
+_s2_closer: 13992/13992 = 1.000000  fails=0
+_s2_interval: 13992/13992 = 1.000000  fails=0
+_s2_gaplca: 13992/13992 = 1.000000  fails=0
+_s2_twolevel: 13992/13992 = 1.000000  fails=0
