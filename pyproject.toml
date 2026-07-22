@@ -9,6 +9,7 @@ dependencies = [
     "transformer-lens>=3.5.1",
     "tabulate>=0.10.0",
     "jaxtyping>=0.3.11",
+    "matplotlib>=3.11.0",
 ]
 
 [project.optional-dependencies]

@@ -8,29 +8,6 @@ from transformer_lens.model_bridge import TransformerBridge
 
 from causal_mediation_helpers import causal_intervention, get_logits_cache, print_aligned_predictions, plot_top_tok_predicted
 
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the sister chases this brother <sep> the sister this brother chases <eos>"
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the researcher chases this dancer <sep> the researcher this dancer chases <eos>"
-
-# original = "<bos> the dog likes that Betty chases Hamilton <sep> the dog Betty Hamilton chases that likes <eos>"
-# counterfactual = "<bos> the dog that likes Betty chases Hamilton <sep> the Betty dog likes that Hamilton chases <eos>"
-
-# original = "<bos> the dog that likes Betty chases Hamilton <sep> the Betty dog likes that Hamilton chases <eos>"
-# counterfactual = "<bos> the dog likes that Betty chases Hamilton <sep> the dog Betty Hamilton chases that likes <eos>"
-
-# original = "<bos> the dog tickles this cat <sep> the dog this cat tickles <eos>"
-# counterfactual = "<bos> the dog hugs this cat <sep> the dog this cat hugs <eos>"
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the dog likes this cat <sep> the dog this cat likes <eos>"
-
-# model_name = "kylelovesllms/gpt2-2l2h128d10ep3lr01drop-shift"
-# out_dir = "experiments/01_causal_mediation_nouns/figures/word_heatmaps"
-
-# TODO Refactor to take tokens
 def residual_stream_causal_mediation(*, 
     model_name: str, 
     original: str, 
