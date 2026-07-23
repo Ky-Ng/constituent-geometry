@@ -36,3 +36,6 @@ data/
 *.pt
 *.bin
 *.safetensors
+
+# AI Generated Design Docs for pedagodgy
+notes/ai_gen_design_docs
