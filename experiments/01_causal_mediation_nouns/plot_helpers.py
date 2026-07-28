@@ -3,6 +3,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
+CJK_FONTS = ['Noto Sans CJK SC', 'Noto Sans CJK SC Regular', 'Noto Sans Mono CJK SC', 'Noto Sans Mono CJK SC Regular', 'Noto Serif CJK SC']
+NOTO_CJK_SC_SANS_ID = 0
 
 def plot_heatmap(
     *,
@@ -17,6 +19,10 @@ def plot_heatmap(
     cmap: LinearSegmentedColormap = LinearSegmentedColormap.from_list(
         "match", ["#1097EB", "#EB1010"])
 ):
+    # Add fonts with the `mplfonts` dependency
+    plt.rcParams["font.sans-serif"] = CJK_FONTS[NOTO_CJK_SC_SANS_ID] 
+    plt.rcParams["axes.unicode_minus"] = False   # keep the minus sign rendering
+
     fig, ax = plt.subplots(figsize=(len(x_labels) * 1.4, len(y_labels) * 1.0))
 
     im = ax.imshow(Z, cmap=cmap, vmin=0, vmax=1,
