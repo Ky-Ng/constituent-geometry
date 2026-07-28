@@ -1,36 +1,14 @@
 import hashlib
 import json
 from pathlib import Path
-from jaxtyping import Float
+from jaxtyping import Int
 from torch import Tensor
 import torch
 from transformer_lens.model_bridge import TransformerBridge
 
 from causal_mediation_helpers import causal_intervention, get_logits_cache, print_aligned_predictions, plot_top_tok_predicted
 
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the sister chases this brother <sep> the sister this brother chases <eos>"
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the researcher chases this dancer <sep> the researcher this dancer chases <eos>"
-
-# original = "<bos> the dog likes that Betty chases Hamilton <sep> the dog Betty Hamilton chases that likes <eos>"
-# counterfactual = "<bos> the dog that likes Betty chases Hamilton <sep> the Betty dog likes that Hamilton chases <eos>"
-
-# original = "<bos> the dog that likes Betty chases Hamilton <sep> the Betty dog likes that Hamilton chases <eos>"
-# counterfactual = "<bos> the dog likes that Betty chases Hamilton <sep> the dog Betty Hamilton chases that likes <eos>"
-
-# original = "<bos> the dog tickles this cat <sep> the dog this cat tickles <eos>"
-# counterfactual = "<bos> the dog hugs this cat <sep> the dog this cat hugs <eos>"
-
-# original = "<bos> the dog chases this cat <sep> the dog this cat chases <eos>"
-# counterfactual = "<bos> the dog likes this cat <sep> the dog this cat likes <eos>"
-
-# model_name = "kylelovesllms/gpt2-2l2h128d10ep3lr01drop-shift"
-# out_dir = "experiments/01_causal_mediation_nouns/figures/word_heatmaps"
-
-# TODO Refactor to take tokens
+@torch.inference_mode()
 def residual_stream_causal_mediation(*, 
     model_name: str, 
     original: str, 
@@ -66,8 +44,8 @@ def residual_stream_causal_mediation(*,
     )
 
     # Activation Patching
-    new_logits_per_intervention: dict[tuple[str, int],
-                                      Float[Tensor, "batch seq vocab"]] = {}
+    new_top_tokens_per_intervention: dict[tuple[str, int],
+                                      Int[Tensor, "batch seq"]] = {}
     _, num_tokens = tokens_original.shape
 
     for hook_name, act_cache in cache_counterfactual.items():
@@ -81,16 +59,20 @@ def residual_stream_causal_mediation(*,
                 counterfactual_tensor=act_cache
             )
 
-            new_logits_per_intervention[(
-                hook_name, tok_pos)] = intervened_logits
+            # Save the top token
+            new_top_tokens_per_intervention[
+                (hook_name, tok_pos)
+            ] = intervened_logits.argmax(dim=-1)
 
     top_tok_per_pos_intervened: dict[tuple[str, int], list[str]] = {}
 
+    # We only use the top token and save this for analysis; no further operations needed so move to cpu
     top_tok_per_pos_original: list[str] = model.to_str_tokens(
-        logits_original.argmax(dim=-1))  # type: ignore
+        logits_original.argmax(dim=-1).cpu()
+    )  # type: ignore
 
-    for (hook_name, layer), logits in new_logits_per_intervention.items():
-        top_token_ids = logits.argmax(dim=-1)  # B, seq
+    # Convert token_id to corresponding string
+    for (hook_name, layer), top_token_ids in new_top_tokens_per_intervention.items():
         top_tok_per_pos_intervened[(hook_name, layer)] = model.to_str_tokens(  # type: ignore
             top_token_ids
         )
@@ -111,7 +93,7 @@ def residual_stream_causal_mediation(*,
     with open(out_dir / "descrip.json", "w", encoding="utf-8") as f:
         json.dump(descrip, f, indent=2)
 
-    for tok_pos, tok_name in enumerate(original.split()):
+    for tok_pos, tok_name in enumerate(model.to_str_tokens(tokens_original)):
         plot_top_tok_predicted(
             target_pos=tok_pos,
             original_tokens=model.to_str_tokens(
