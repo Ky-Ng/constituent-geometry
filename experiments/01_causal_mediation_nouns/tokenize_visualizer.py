@@ -6,14 +6,14 @@ from transformer_lens.model_bridge import TransformerBridge
 # model_name = "google/gemma-3-4b-it"
 
 
-def visualize_tokenized(model_name: str, to_translate: str, translated: str) -> None:
+def visualize_tokenized(model_name: str, to_translate: str, translated: str, target_language: str = "Japanese") -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = TransformerBridge.boot_transformers(model_name, device=device)
 
     messages = [
         {
             "role": "system",
-            "content": [{"type": "text", "text": "You are a helpful assistant. Respond only with the translation from English to Japanese."}]
+            "content": [{"type": "text", "text": f"You are a helpful assistant. Respond only with the translation from English to {target_language}."}]
         },
         {
             "role": "user",
@@ -70,18 +70,24 @@ if __name__ == "__main__":
     parser.add_argument(
         "--to-translate",
         required=True,
-        help="English text to translate to Japanese",
+        help="English text to translate to Japanese/Head Final language",
     )
     parser.add_argument(
         "--translated",
         required=True,
         help="Japanese text",
     )
+    parser.add_argument(
+        "--target-language",
+        required=True,
+        help="Target language specified in System Prompt",
+        default="Japanese"
+    )
     args = parser.parse_args()
 
     visualize_tokenized(
         model_name=args.model_name,
         to_translate=args.to_translate,
-        translated=args.translated
+        translated=args.translated,
+        target_language=args.target_language
     )
-    

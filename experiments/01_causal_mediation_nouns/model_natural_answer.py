@@ -3,12 +3,14 @@ from transformer_lens.model_bridge import TransformerBridge
 
 # model_name = "google/gemma-3-4b-it"
 # to_translate = "this cat chases the dog"
-def get_model_natural_answer(model_name: str, to_translate: str) -> str:
+
+
+def get_model_natural_answer(model_name: str, to_translate: str, target_language: str = "Japanese") -> str:
 
     messages = [
         {
             "role": "system",
-            "content": [{"type": "text", "text": "You are a helpful assistant. Respond only with the translation from English to Japanese."}]
+            "content": [{"type": "text", "text": f"You are a helpful assistant. Respond only with the translation from English to {target_language}."}]
         },
         {
             "role": "user",
@@ -55,6 +57,7 @@ def get_model_natural_answer(model_name: str, to_translate: str) -> str:
     print("#"*20)
     return out_str
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -69,8 +72,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--to-translate",
         required=True,
-        help="English text to translate to Japanese",
+        help="English text to translate to Japanese/Head Final language",
+    )
+    parser.add_argument(
+        "--target-language",
+        required=True,
+        help="Target language specified in System Prompt",
+        default="Japanese"
     )
     args = parser.parse_args()
 
-    get_model_natural_answer(args.model_name, args.to_translate)
+    get_model_natural_answer(
+        args.model_name, args.to_translate, args.target_language)
