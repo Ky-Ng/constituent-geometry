@@ -1,0 +1,12 @@
+{
+    "system_prompt": "",
+    "assistant_prefix": "",
+    "prompts": [
+        {
+            "original": "the dog chases the cat",
+            "original_translated": "the dog the cat chases",
+            "counterfactual": "the researcher pursues the dancer",
+            "counterfactual_translated": "the researcher the dancer pursues"
+        }
+    ]
+}

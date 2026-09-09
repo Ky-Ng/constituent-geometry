@@ -1,0 +1,14 @@
+{
+    "model_tag": "gpt2-2l2h128d10ep3lr01drop",
+    "src_model_path": "kylelovesllms/gpt2-2l2h128d10ep3lr01drop-shift",
+
+    "_target_hookpoint_filter": "attn.hook_v",
+    "target_hookpoint_filter": "resid",
+    "critical_pos": 7,
+
+    "prompts_file": "experiments/04_generalized_activation_patching/artifacts/prompts/simple_transitive.json", 
+
+    "metric": "str",
+    "out": "str",
+    "log_dir": "experiments/04_generalized_activation_patching/logs/simple_transitive/"
+}
